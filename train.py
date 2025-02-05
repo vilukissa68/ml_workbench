@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,12 +7,8 @@ import torchvision.transforms as transforms
 import os
 from tqdm import tqdm
 
-# Set up the transformations (you can change these as needed)
-transform = transforms.Compose(
-    [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
-)
 
-
+# TODO: Move data loaders into data_loaders/ module
 def get_data_loaders(dataset_name, batch_size, transform=None):
     if dataset_name == "CIFAR10":
         trainset = torchvision.datasets.CIFAR10(
@@ -35,8 +29,19 @@ def get_data_loaders(dataset_name, batch_size, transform=None):
 
     train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False)
+    no_classes = len(trainset.classes)
 
-    return train_loader, test_loader
+    return train_loader, test_loader, no_classes
+
+
+def get_optimizer(optimizer_type, model, lr):
+    if optimizer_type == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    elif optimizer_type == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+    else:
+        raise ValueError(f"Optimizer {optimizer_type} is not supported!")
+    return optimizer
 
 
 def train_one_epoch(model, data_loader, criterion, optimizer, device, verbose=False):
@@ -109,13 +114,7 @@ def train(
     criterion = nn.CrossEntropyLoss()
     model.to(device)
 
-    # Set optimizer
-    if optimizer_type == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    elif optimizer_type == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=lr)
-    else:
-        raise ValueError(f"Optimizer {optimizer_type} is not supported!")
+    optimizer = get_optimizer(args.optimizer, model, lr)
 
     # Training loop
     for epoch in range(num_epochs):
@@ -127,11 +126,11 @@ def train(
         )
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.2f}%")
 
-        # Evaluate on the validation/test set
+        # Evaluation
         test_loss, test_acc = evaluate(model, test_loader, criterion, device, verbose)
         print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.2f}%")
 
-        # Save checkpoint after each epoch with quantization and pruning info
+        # Save checkpoint after each epoch overwriting the previous epochs checkpoint
         save_checkpoint(
             model,
             optimizer,
@@ -148,7 +147,6 @@ def train(
     print("Training Complete!")
 
 
-# Checkpoint saving/loading utilities
 def save_checkpoint(
     model,
     optimizer,
@@ -156,7 +154,6 @@ def save_checkpoint(
     model_name,
     dataset_name,
     batch_size,
-    lr,
     checkpoint_dir,
     quantization_info="no_quantization",
     pruning_info="no_pruning",
@@ -165,13 +162,9 @@ def save_checkpoint(
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
 
-    # Construct the checkpoint filename without timestamp for overwriting
-    checkpoint_filename = f"{model_name}_{dataset_name}_{batch_size}_{lr:.6f}_{epoch+1}_{quantization_info}_{pruning_info}.pth"
-
-    # Full path to save the checkpoint (fixed filename)
+    checkpoint_filename = f"{model_name}_{dataset_name}_{batch_size}_{epoch+1}_{quantization_info}_{pruning_info}.pth"
     checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
 
-    # Save the model checkpoint
     torch.save(
         {
             "epoch": epoch,

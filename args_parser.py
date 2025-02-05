@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 
 
@@ -19,14 +17,17 @@ def parse_args():
         "--quantize", action="store_true", help="Flag to quantize the model."
     )
     parser.add_argument("--prune", action="store_true", help="Flag to prune the model.")
+    parser.add_argument(
+        "--visualize", action="store_true", help="Visualize part of the dataset."
+    )
 
     # General options
     parser.add_argument(
         "--device",
         type=str,
         default="cuda",
-        choices=["cpu", "cuda"],
-        help="Device to run on, either 'cpu' or 'cuda'. Default is 'cuda'.",
+        choices=["cpu", "cuda", "mps"],
+        help="Device to run on, either 'cpu', 'cuda' or 'mps'. Default is 'cuda'.",
     )
     parser.add_argument(
         "--seed",
@@ -76,6 +77,7 @@ def parse_args():
     parser.add_argument(
         "--lr", type=float, default=0.001, help="Learning rate. Default is 0.001."
     )
+
     # Checkpoint options
     parser.add_argument(
         "--checkpoint-dir",
@@ -84,12 +86,28 @@ def parse_args():
         help="Path to save model checkpoints. If None, no checkpoints are saved.",
     )
 
+    # Checkpoint options
+    parser.add_argument(
+        "--load-checkpoint-path",
+        type=str,
+        default=None,
+        help="Path to model checkpoint to load. If empty no checkpoint will be loaded.",
+    )
+
     # Logging options
     parser.add_argument(
         "--log-dir",
         type=str,
         default="./logs",
         help="Directory to save logs. Default is './logs'.",
+    )
+
+    # Benchmarking options
+    parser.add_argument(
+        "--benchmark-num-iterations",
+        type=int,
+        default=100,
+        help="Number of iterations during inference benchmarking.",
     )
 
     # Other options
