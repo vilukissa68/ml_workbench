@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 
 # TODO: Move data loaders into data_loaders/ module
-def get_data_loaders(dataset_name, batch_size, transform=None):
+def get_data_loaders(dataset_name, batch_size, transform=None, num_workers=0):
     if dataset_name == "CIFAR10":
         trainset = torchvision.datasets.CIFAR10(
             root="./data", train=True, download=True, transform=transform
@@ -27,8 +27,12 @@ def get_data_loaders(dataset_name, batch_size, transform=None):
     else:
         raise ValueError(f"Dataset {dataset_name} is not supported!")
 
-    train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(
+        trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+    )
+    test_loader = DataLoader(
+        testset, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
     no_classes = len(trainset.classes)
 
     return train_loader, test_loader, no_classes
@@ -101,8 +105,6 @@ def train(
     train_loader,
     test_loader,
     args,
-    quantization_info="no_q",
-    pruning_info="no_prune",
 ):
     device = args.device
     num_epochs = args.epochs
@@ -138,10 +140,9 @@ def train(
             model_name=args.model,
             dataset_name=args.dataset,
             batch_size=batch_size,
-            lr=lr,
             checkpoint_dir=args.checkpoint_dir,
-            quantization_info=quantization_info,
-            pruning_info=pruning_info,
+            quantized=False,
+            pruned=False,
         )
 
     print("Training Complete!")
@@ -155,19 +156,32 @@ def save_checkpoint(
     dataset_name,
     batch_size,
     checkpoint_dir,
-    quantization_info="no_quantization",
-    pruning_info="no_pruning",
+    quantized=False,
+    pruned=False,
 ):
     # Create the checkpoint directory if it doesn't exist
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
+
+    if quantized:
+        quantization_info = "q"
+    else:
+        quantization_info = "no_q"
+
+    if pruned:
+        pruning_info = "pruned"
+    else:
+        pruning_info = "no_prune"
 
     checkpoint_filename = f"{model_name}_{dataset_name}_{batch_size}_{epoch+1}_{quantization_info}_{pruning_info}.pth"
     checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
 
     torch.save(
         {
+            "model_name": model_name,
             "epoch": epoch,
+            "quantized": quantized,
+            "pruned": pruned,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
         },
@@ -183,4 +197,6 @@ def load_checkpoint(model, optimizer, checkpoint_path):
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     epoch = checkpoint["epoch"]
-    return model, optimizer, epoch
+    quantized = checkpoint["quantized"]
+    pruned = checkpoint["pruned"]
+    return model, optimizer, epoch, quantized, pruned

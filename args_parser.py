@@ -1,4 +1,11 @@
 import argparse
+import inspect
+import models
+
+
+# Extract all function names from the models module
+def get_available_models():
+    return [name for name, func in inspect.getmembers(models, inspect.isfunction)]
 
 
 def parse_args():
@@ -12,9 +19,6 @@ def parse_args():
     )
     parser.add_argument(
         "--benchmark", action="store_true", help="Flag to trigger benchmarking."
-    )
-    parser.add_argument(
-        "--quantize", action="store_true", help="Flag to quantize the model."
     )
     parser.add_argument("--prune", action="store_true", help="Flag to prune the model.")
     parser.add_argument(
@@ -41,7 +45,7 @@ def parse_args():
         "--model",
         type=str,
         default="resnet18",
-        choices=["resnet18", "resnet34", "resnet50"],
+        choices=get_available_models(),
         help="Model architecture to use. Default is 'resnet18'.",
     )
 
@@ -78,6 +82,38 @@ def parse_args():
         "--lr", type=float, default=0.001, help="Learning rate. Default is 0.001."
     )
 
+    # Quantization options
+    parser.add_argument(
+        "--quantize",
+        action="store_true",
+        help="Flag to enable model quantization",
+    )
+    parser.add_argument(
+        "--save-quantized",
+        action="store_true",
+        help="Save quantized checkpoints. Only applies to PTQ.",
+    )
+
+    parser.add_argument(
+        "--qat",
+        action="store_true",
+        help="Flag to use quantization aware training.",
+    )
+    parser.add_argument(
+        "--quantization-method",
+        type=str,
+        default="ptsq",
+        choices=["ptsq"],
+        help="Define methods used for quantization.",
+    )
+    parser.add_argument(
+        "--quantization-backend",
+        type=str,
+        default="qnnpack",
+        choices=["qnnpack", "x86", "fbgemm"],
+        help="Define quantization backend.",
+    )
+
     # Checkpoint options
     parser.add_argument(
         "--checkpoint-dir",
@@ -110,11 +146,36 @@ def parse_args():
         help="Number of iterations during inference benchmarking.",
     )
 
+    # Fine tuning
+    parser.add_argument(
+        "--fine-tune",
+        action="store_true",
+        help="Load pretrained version of torchvision models for finetuning",
+    )
+    parser.add_argument(
+        "--weights",
+        type=str,
+        default="",
+        help="Pretrained weigths for torchvision models",
+    )
+
     # Other options
     parser.add_argument(
         "--verbose",
         action="store_true",
         help="If set, enables verbose output during training.",
+    )
+
+    # TVM integration options
+    parser.add_argument(
+        "--tvm-export",
+        action="store_true",
+        help="Flag to export model to TVM.",
+    )
+    parser.add_argument(
+        "--tvm-export-quantized",
+        action="store_true",
+        help="Flag to export quantized model to TVM.",
     )
 
     return parser.parse_args()
