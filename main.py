@@ -6,11 +6,11 @@ import args_parser
 import torchvision.transforms as transforms
 from benchmark_inference import benchmark_inference  # Import the benchmarking function
 from visualize import imshow_batch
-from integrations import tvm_import_pytorch_model, tvm_compile
 import torch
 from quantize import ptsq
 from qat import train_qat
 from prune import prune_model_global
+
 
 
 def load_model(model_name, num_classes, args):
@@ -106,6 +106,7 @@ def main():
         imshow_batch(images, labels=labels, normalize=True)
 
     if args.tvm_export:
+        from integrations import tvm_import_pytorch_model, tvm_compile
         mod, params = tvm_import_pytorch_model(model, example_input.shape)
         tvm_compile(mod, params, "./tvm_builds")
         print("TVM compilation finished.")
