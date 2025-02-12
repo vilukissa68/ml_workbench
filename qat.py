@@ -46,7 +46,7 @@ def evaluate(model, test_loader, device="cpu"):
     return accuracy
 
 
-def train_qat(model, train_loader, test_loader, args):
+def train_qat(model, dataset, args):
     device = args.device
     num_epochs = args.epochs
     lr = args.lr
@@ -54,6 +54,8 @@ def train_qat(model, train_loader, test_loader, args):
     verbose = args.verbose
     batch_size = args.batch_size
     backend = args.quantization_backend
+
+    train_loader, test_loader = data.get_data_loaders()
 
     model.to(device)
     model.train()

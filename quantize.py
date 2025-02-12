@@ -80,12 +80,13 @@ def fuse_model_layers(model):
 
 def ptsq(
     model,
-    data_loader,
+    dataset,
     dtype=torch.qint8,
     backend="qnnpack",
     wrap=True,
     calibration_batches=100,
 ):
+    data_loader, _ = dataset.get_data_loaders()
     # Model needs to be quantized on CPU
     model.to("cpu")
 

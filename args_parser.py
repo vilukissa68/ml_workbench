@@ -1,11 +1,16 @@
 import argparse
 import inspect
 import models
+import datasets
 
 
 # Extract all function names from the models module
 def get_available_models():
     return [name for name, func in inspect.getmembers(models, inspect.isfunction)]
+
+
+def get_available_datasets():
+    return [name for name, func in inspect.getmembers(datasets, inspect.isclass)]
 
 
 def parse_args():
@@ -66,7 +71,7 @@ def parse_args():
         "--dataset",
         type=str,
         default="CIFAR10",
-        choices=["CIFAR10", "MNIST", "ImageNet"],
+        choices=get_available_datasets(),
         help="Dataset to use for training. Default is 'CIFAR10'.",
     )
 

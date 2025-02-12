@@ -5,37 +5,8 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 import os
+from datasets import mnist, cifar10
 from tqdm import tqdm
-
-
-# TODO: Move data loaders into data_loaders/ module
-def get_data_loaders(dataset_name, batch_size, transform=None, num_workers=0):
-    if dataset_name == "CIFAR10":
-        trainset = torchvision.datasets.CIFAR10(
-            root="./data", train=True, download=True, transform=transform
-        )
-        testset = torchvision.datasets.CIFAR10(
-            root="./data", train=False, download=True, transform=transform
-        )
-    elif dataset_name == "MNIST":
-        trainset = torchvision.datasets.MNIST(
-            root="./data", train=True, download=True, transform=transform
-        )
-        testset = torchvision.datasets.MNIST(
-            root="./data", train=False, download=True, transform=transform
-        )
-    else:
-        raise ValueError(f"Dataset {dataset_name} is not supported!")
-
-    train_loader = DataLoader(
-        trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers
-    )
-    test_loader = DataLoader(
-        testset, batch_size=batch_size, shuffle=False, num_workers=num_workers
-    )
-    no_classes = len(trainset.classes)
-
-    return train_loader, test_loader, no_classes
 
 
 def get_optimizer(optimizer_type, model, lr):
@@ -102,8 +73,7 @@ def evaluate(model, data_loader, criterion, device, verbose=False):
 
 def train(
     model,
-    train_loader,
-    test_loader,
+    dataset,
     args,
 ):
     device = args.device
@@ -112,11 +82,12 @@ def train(
     optimizer_type = args.optimizer
     verbose = args.verbose
     batch_size = args.batch_size
-
     criterion = nn.CrossEntropyLoss()
-    model.to(device)
-
     optimizer = get_optimizer(args.optimizer, model, lr)
+
+    train_loader, test_loader = dataset.get_data_loaders(args.batch_size)
+
+    model.to(device)
 
     # Training loop
     for epoch in range(num_epochs):

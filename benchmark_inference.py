@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 
-def benchmark_inference(model, data_loader, device, num_iterations):
+def benchmark_inference(model, dataset, batch_size, device, num_iterations):
     """
     Benchmarks the inference latency and measures accuracy of the model.
 
@@ -22,6 +22,8 @@ def benchmark_inference(model, data_loader, device, num_iterations):
 
     correct = 0
     total = 0
+
+    _, data_loader = dataset.get_data_loaders(batch_size)
 
     # Warm-up
     for _ in range(5):
@@ -54,7 +56,9 @@ def benchmark_inference(model, data_loader, device, num_iterations):
     avg_latency = total_time / num_iterations
     accuracy = correct / total * 100
 
-    print(f"Average Inference Latency: {avg_latency * 1000:.4f} ms per batch")
+    print(
+        f"Average Inference Latency: {avg_latency * 1000:.4f} ms per batch (batch size = {batch_size})"
+    )
     print(f"Accuracy: {accuracy:.2f}%")
 
     return {"accuracy": accuracy, "avg_latency": avg_latency * 1000}  # Latency in ms
