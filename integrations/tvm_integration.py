@@ -3,6 +3,7 @@ import torch
 import os
 from tvm import relay
 from tvm.micro import export_model_library_format
+from .utils import extract_tar
 
 
 def tvm_export_model(model, data_shapes, model_type="pytorch"):
@@ -54,9 +55,9 @@ def tvm_compile(mod, params, build_dir, target=None):
 
     config = {"tir.disable_vectorize": True}
 
-    disable_passes = []
+    disable_passes = ["FoldConstant"]
     with tvm.transform.PassContext(
-        opt_level=1, config=config, disabled_pass=disable_passes
+        opt_level=3, config=config, disabled_pass=disable_passes
     ):
         lib = relay.build(
             mod, target=target, runtime=runtime, params=params, executor=executor
@@ -68,3 +69,4 @@ def tvm_compile(mod, params, build_dir, target=None):
         build_dir, file_format_str.format(name="model", ext="tar")
     )
     export_model_library_format(lib, lib_file_name)
+    extract_tar(lib_file_name, build_dir)
