@@ -167,6 +167,9 @@ def main():
         tvm_compile(mod, params, "./tvm_builds")
         print("TVM compilation finished.")
 
+    if writer:
+        writer.close()
+
 
 if __name__ == "__main__":
     main()
