@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 import os
 from datasets import mnist, cifar10
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 
 def get_optimizer(optimizer_type, model, lr):
@@ -75,6 +76,7 @@ def train(
     model,
     dataset,
     args,
+    writer=None,
 ):
     device = args.device
     num_epochs = args.epochs
@@ -99,9 +101,19 @@ def train(
         )
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.2f}%")
 
+        if writer:
+            writer.add_scalar("Loss/train", train_loss, epoch)
+            writer.add_scalar("Acc/train", train_acc, epoch)
+            writer.flush()
+
         # Evaluation
         test_loss, test_acc = evaluate(model, test_loader, criterion, device, verbose)
         print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.2f}%")
+
+        if writer:
+            writer.add_scalar("Loss/test", test_loss, epoch)
+            writer.add_scalar("Acc/test", test_acc, epoch)
+            writer.flush()
 
         # Save checkpoint after each epoch overwriting the previous epochs checkpoint
         save_checkpoint(
@@ -117,6 +129,16 @@ def train(
         )
 
     print("Training Complete!")
+
+    if writer:
+        images, _ = next(iter(train_loader))
+        images.to("cpu")
+        model.to("cpu")
+        print(images)
+        writer.add_graph(model, images)
+        writer.flush()
+        writer.close()
+        model.to(device)
 
 
 def save_checkpoint(

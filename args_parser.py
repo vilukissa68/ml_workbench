@@ -29,6 +29,9 @@ def parse_args():
     parser.add_argument(
         "--visualize", action="store_true", help="Visualize part of the dataset."
     )
+    parser.add_argument(
+        "--tensorboard", action="store_true", help="Visualize training with Tensorboard"
+    )
 
     # General options
     parser.add_argument(

@@ -12,6 +12,8 @@ from quantize import ptsq
 from qat import train_qat
 from prune import prune_model_global
 from datasets import mnist, cifar10, mlperf_tiny_kws
+from datetime import datetime
+from torch.utils.tensorboard import SummaryWriter
 
 
 def load_model(model_name, num_classes, args):
@@ -109,6 +111,14 @@ def main():
 
     dataset = get_dataset(args.dataset, transform)
 
+    writer = None
+    if args.tensorboard:
+        print("Tensorboard loggin enabled.")
+        print("Make sure tensorboard is running: tensorboard --logdir=runs")
+        timestamp = datetime.now().strftime("%y-%m-%d-%H-%M")
+        run_name = f"{args.model}_{args.dataset}_{args.batch_size}_{timestamp}"
+        writer = SummaryWriter(f"runs/{run_name}")
+
     if args.load_checkpoint_path:
         model, model_q, model_type = load_checkpoint(args)
     else:  # Load empty model
@@ -126,7 +136,7 @@ def main():
             model = train_qat(model, dataset, args)
             q_model = model
         else:
-            train(model, dataset, args)
+            train(model, dataset, args, writer)
         model_type = "pytorch"
 
     # Quantizie fp32, skip if using QAT already
