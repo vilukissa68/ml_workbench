@@ -43,3 +43,17 @@ class MNIST(BaseDataset):
 
     def get_example_input(self, num=1):
         return self.trainset[0:num]
+
+    def get_labels(self):
+        return [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+        ]

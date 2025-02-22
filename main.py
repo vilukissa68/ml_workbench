@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from train import train, load_checkpoint, get_optimizer
-from export import export
+from train import train, get_optimizer
+from export import export, load_checkpoint
 import models
 import args_parser
 from benchmark_inference import benchmark_inference  # Import the benchmarking function
-from visualize import imshow_batch
+from visualize import imshow_batch, plot_confusion_matrix_to_tensorboard
 import torch
 import os
 from quantize import ptsq
@@ -42,60 +42,20 @@ def get_dataset(dataset_name, args):
 
 
 def run_benchmark(args, dataset, model=None, model_q=None):
-    if args.benchmark:
-        if model:
-            print("Running inference benchmarking...")
-            benchmark_inference(
-                model,
-                dataset,
-                args.batch_size,
-                args.device,
-                num_iterations=args.benchmark_num_iterations,
-            )
-        if model_q:
-            print("Running quantized inference benchmark...")
-            benchmark_inference(
-                model_q,
-                dataset,
-                args.batch_size,
-                "cpu",
-                num_iterations=args.benchmark_num_iterations,
-            )
-
-
-def load_checkpoint(args):
-    _, file_extension = os.path.splitext(args.load_checkpoint_path)
-    model_q = None
-    model = None
-    model_type = "pytorch"
-
-    # Tflite load
-    if file_extension == ".tflite":
-        print(args.load_checkpoint_path)
-        tflite_model_buf = open(args.load_checkpoint_path, "rb").read()
-        print("Loading TFLite model")
-        model_type = "tflite"
-        try:
-            import tflite
-
-            model = tflite.Model.GetRootAsModel(tflite_model_buf, 0)
-        except AttributeError:
-            import tflite.model
-
-            model = tflite.Model.Model.GetRootAsModel(tflite_model_buf, 0)
-
-    # Pytorch load
-    else:
-        model_name = torch.load(args.load_checkpoint_path)["model_name"]
-        model = load_model(model_name, num_classes, args)
-        optimizer = get_optimizer(args.optimizer, model, args.lr)
-        model, optimizer, epoch, quantized, pruned = load_checkpoint(
-            model, optimizer, args.load_checkpoint_path
-        )
-        if quantized:
-            model_q = model
-            model_q.to("cpu")
-    return model, model_q, model_type
+    return benchmark_inference(
+        model,
+        dataset,
+        args.batch_size,
+        args.device,
+        num_iterations=args.benchmark_num_iterations,
+    )
+    benchmark_inference(
+        model_q,
+        dataset,
+        args.batch_size,
+        "cpu",
+        num_iterations=args.benchmark_num_iterations,
+    )
 
 
 def main():
@@ -120,16 +80,15 @@ def main():
         model_q = None
 
     if args.train or args.fine_tune or args.qat:
-        if args.train:
-            print("Training model...")
-        elif args.fine_tune:
-            print("Fine tuning model...")
-
         if args.qat:
             print("Quantization aware training...")
             model = train_qat(model, dataset, args)
             q_model = model
         else:
+            if args.train:
+                print("Training model...")
+            elif args.fine_tune:
+                print("Fine tuning model...")
             train(model, dataset, args, writer)
         model_type = "pytorch"
 
@@ -141,7 +100,7 @@ def main():
         else:
             print("Error! Unknown quantization method.")
             return
-        run_benchmark(args, dataset, model, model_q)
+        run_benchmark(args, dataset, model, model_q, writer)
 
     if args.prune:
         if model_q:
@@ -153,6 +112,40 @@ def main():
     if args.visualize:
         images, labels = next(iter(test_loader))
         imshow_batch(images, labels=labels, normalize=True)
+
+    if args.benchmark:
+        if model:
+            bm_res = benchmark_inference(
+                model,
+                dataset,
+                args.batch_size,
+                args.device,
+                num_iterations=args.benchmark_num_iterations,
+            )
+            if writer:
+                plot_confusion_matrix_to_tensorboard(
+                    bm_res["labels"],
+                    bm_res["predictions"],
+                    dataset.get_labels(),
+                    writer,
+                    args.epochs,
+                )
+        if model_q:
+            q_bm_res = benchmark_inference(
+                model_q,
+                dataset,
+                args.batch_size,
+                "cpu",
+                num_iterations=args.benchmark_num_iterations,
+            )
+            if writer:
+                plot_confusion_matrix_to_tensorboard(
+                    q_bm_res["labels"],
+                    q_bm_res["predictions"],
+                    dataset.get_labels(),
+                    writer,
+                    args.epochs,
+                )
 
     export(model, dataset, args)
 

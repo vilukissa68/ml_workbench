@@ -23,7 +23,7 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
     correct = 0
     total = 0
 
-    _, data_loader = dataset.get_data_loaders(batch_size)
+    _, data_loader = dataset.get_data_loaders()
 
     # Warm-up
     for _ in range(5):
@@ -34,6 +34,8 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
 
     # Start benchmarking
     total_time = 0
+    all_preds = []
+    all_lables = []
     for i, (inputs, labels) in enumerate(data_loader):
         if i >= num_iterations:
             break
@@ -52,6 +54,8 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
         preds = outputs.argmax(dim=1)  # Get the predicted class
         correct += (preds == labels).sum().item()
         total += labels.size(0)
+        all_preds.extend(preds.to("cpu"))
+        all_lables.extend(labels.to("cpu"))
 
     avg_latency = total_time / num_iterations
     accuracy = correct / total * 100
@@ -61,4 +65,9 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
     )
     print(f"Accuracy: {accuracy:.2f}%")
 
-    return {"accuracy": accuracy, "avg_latency": avg_latency * 1000}  # Latency in ms
+    return {
+        "accuracy": accuracy,
+        "avg_latency": avg_latency * 1000,
+        "predictions": all_preds,
+        "labels": all_lables,
+    }  # Latency in ms
