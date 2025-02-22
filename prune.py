@@ -34,3 +34,22 @@ def prune_model_global(model, amount=0.5, pruning_method=prune.L1Unstructured):
     print(
         f"Pruned {amount * 100}% of the weights globally across {len(parameters_to_prune)} layers."
     )
+
+
+def is_model_pruned(model):
+    """
+    Check if any of the layers in the model have been pruned.
+
+    Args:
+    - model (torch.nn.Module): The model to check.
+
+    Returns:
+    - bool: True if any layer is pruned, False otherwise.
+    """
+    for module in model.modules():
+        # Check if the module is pruned by looking for weight_mask attributes
+        if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
+            if hasattr(module, "weight_mask"):
+                return True  # Layer has been pruned
+
+    return False

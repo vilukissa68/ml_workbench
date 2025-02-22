@@ -1,25 +1,39 @@
 import torchvision
 from .base_dataset import BaseDataset
 from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
+
+transform = transforms.Compose(
+    [
+        transforms.Resize((28, 28)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
 
 
 class MNIST(BaseDataset):
-    def __init__(self):
-        super(BaseDataset, self).__init__()
+    def __init__(self, batch_size=64, shuffle=True):
+        super(BaseDataset, self).__init__(batch_size=batch_size, shuffle=shuffle)
         self.has_labels = False
+        load_data()
 
     def load_data(self):
-        self.trainset = trainset = torchvision.datasets.MNIST(
+        self.trainset = torchvision.datasets.MNIST(
             root="./data", train=True, download=True, transform=transform
         )
-        self.testset = testset = torchvision.datasets.MNIST(
+        self.testset = torchvision.datasets.MNIST(
             root="./data", train=False, download=True, transform=transform
         )
+        self.train_loader = DataLoader(
+            self.trainset, batch_size=self.batch_size, shuffle=self.shuffle
+        )
+        self.test_loader = DataLoader(
+            self.testset, batch_size=self.batch_size, shuffle=False
+        )
 
-    def get_data_loaders(self, batch_size=64, shuffle=True):
-        train_loader = DataLoader(self.trainset, batch_size=batch_size, shuffle=shuffle)
-        test_loader = DataLoader(self.testset, batch_size=batch_size, shuffle=False)
-        return train_loader, test_loader
+    def get_data_loaders(self):
+        return self.train_loader, self.test_loader
 
     def get_data_shapes(self):
         return {"input0": (1, 28, 28, 1)}

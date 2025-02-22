@@ -174,6 +174,24 @@ def parse_args():
         help="If set, enables verbose output during training.",
     )
 
+    # Export options
+    parser.add_argument(
+        "--export_path",
+        type=str,
+        default="./checkpoints",
+        help="Path to save exported models.",
+    )
+    parser.add_argument(
+        "--export-torchscript",
+        action="store_true",
+        help="Flag to export loaded model in torchscript format.",
+    )
+    parser.add_argument(
+        "--export-torchdynamo",
+        action="store_true",
+        help="Flag to export loaded model in torchdynamo format.",
+    )
+
     # TVM integration options
     parser.add_argument(
         "--tvm-export",

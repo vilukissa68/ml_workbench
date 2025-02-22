@@ -1,19 +1,26 @@
 from torch.utils.data import Dataset, DataLoader
 from .base_dataset import BaseDataset
 from .utils import download_file, extract_tar_gz
-import requests
+import torchvision.transforms as transforms
 
 URL = "https://codeload.github.com/eembc/energyrunner/tar.gz/main"
 DOWNLOAD_PATH = "./data/kws.tar.gz"
 EXTRACT_PATH = "./data/mlperf_tiny_kws"
 DATA_PATH = EXTRACT_PATH + "/" + "energyrunner-main/datasets/kws01"
 
+transform = transforms.Compose(
+    [
+        transforms.Resize((49, 10)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
+
 
 class MLPerfTinyKWS(BaseDataset):
-    def __init__(self, data_path=DATA_PATH, transform=None):
-        super().__init__(data_path=data_path, transform=transform)
+    def __init__(self, data_path=DATA_PATH, batch_size=64, shuffle=True):
+        super().__init__(data_path=data_path, batch_size=batch_size, shuffle=shuffle)
         self.has_labels = True
-        self.transform = transform
         self.load_data()
 
     def load_data(self):
@@ -22,11 +29,15 @@ class MLPerfTinyKWS(BaseDataset):
         # untar
         self.trainset = None
         self.testset = None
+        self.train_loader = DataLoader(
+            self.trainset, batch_size=self.batch_size, shuffle=self.shuffle
+        )
+        self.test_loader = DataLoader(
+            self.testset, batch_size=self.batch_size, shuffle=False
+        )
 
     def get_data_loaders(self, batch_size=64, shuffle=True):
-        train_loader = DataLoader(self.trainset, batch_size=batch_size, shuffle=shuffle)
-        test_loader = DataLoader(self.testset, batch_size=batch_size, shuffle=False)
-        return train_loader, test_loader
+        return self.train_loader, self.test_loader
 
     def get_data_shapes(self):
         return {"input_1": (1, 49, 10, 1)}

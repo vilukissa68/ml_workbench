@@ -111,3 +111,25 @@ def ptsq(
     model_int8 = torch.ao.quantization.convert(model_prepared, inplace=False)
 
     return model_int8
+
+
+def is_model_quantized(model):
+    """
+    Check if the model is quantized.
+
+    Args:
+    - model (torch.nn.Module): The model to check.
+
+    Returns:
+    - bool: True if the model is quantized, False otherwise.
+    """
+    # Check if the model has quantized layers (Conv2d, Linear, etc.)
+    for module in model.modules():
+        if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear)):
+            return True
+
+    # Check for quantization stubs (QuantStub and DeQuantStub) inserted during quantization
+    if isinstance(model, torch.quantization.QuantStub):
+        return True
+
+    return False

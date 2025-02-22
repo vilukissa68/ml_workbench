@@ -96,14 +96,15 @@ def train_qat(model, dataset, args):
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss / len(train_loader)}")
         save_checkpoint(
             model,
-            optimizer,
-            epoch,
+            args,
+            optimizer=optimizer,
+            optimizer_name=optimizer_type,
+            epoch=epoch,
+            learning_rate=lr,
             model_name=args.model,
             dataset_name=args.dataset,
-            batch_size=batch_size,
+            batch_size=args.batch_size,
             checkpoint_dir=args.checkpoint_dir,
-            quantized=True,
-            pruned=False,
         )
 
     print("QAT Training complete.")

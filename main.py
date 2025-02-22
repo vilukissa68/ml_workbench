@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 from train import train, load_checkpoint, get_optimizer
+from export import export
 import models
 import args_parser
-import torchvision.transforms as transforms
 from benchmark_inference import benchmark_inference  # Import the benchmarking function
 from visualize import imshow_batch
 import torch
@@ -14,6 +14,8 @@ from prune import prune_model_global
 from datasets import mnist, cifar10, mlperf_tiny_kws
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
+
+TIMESTAMP = datetime.now().strftime("%y-%m-%d-%H-%M")
 
 
 def load_model(model_name, num_classes, args):
@@ -27,14 +29,14 @@ def load_model(model_name, num_classes, args):
     return model
 
 
-def get_dataset(dataset_name, transform):
+def get_dataset(dataset_name, args):
     dataset_name = dataset_name.lower()
     if dataset_name == "cifar10":
-        return cifar10.CIFAR10(transform=transform)
+        return cifar10.CIFAR10(batch_size=args.batch_size)
     elif dataset_name == "mnist":
-        return mnist.MNIST(transform=transform)
+        return mnist.MNIST(batch_size=args.batch_size)
     elif dataset_name == "mlperftinykws":
-        return mlperf_tiny_kws.MLPerfTinyKWS(transform=transform)
+        return mlperf_tiny_kws.MLPerfTinyKWS(batch_size=args.batch_size)
     else:
         raise Exception(f"No dataset named {dataset_name} found.")
 
@@ -100,23 +102,15 @@ def main():
     args = args_parser.parse_args()
 
     print(f"Arguments: {args}")
+    args.timestamp = TIMESTAMP
 
-    transform = transforms.Compose(
-        [
-            transforms.Resize((32, 32)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,)),
-        ]
-    )
-
-    dataset = get_dataset(args.dataset, transform)
+    dataset = get_dataset(args.dataset, args)
 
     writer = None
     if args.tensorboard:
         print("Tensorboard loggin enabled.")
         print("Make sure tensorboard is running: tensorboard --logdir=runs")
-        timestamp = datetime.now().strftime("%y-%m-%d-%H-%M")
-        run_name = f"{args.model}_{args.dataset}_{args.batch_size}_{timestamp}"
+        run_name = f"{args.model}_{args.dataset}_{args.batch_size}_{TIMESTAMP}"
         writer = SummaryWriter(f"runs/{run_name}")
 
     if args.load_checkpoint_path:
@@ -160,12 +154,12 @@ def main():
         images, labels = next(iter(test_loader))
         imshow_batch(images, labels=labels, normalize=True)
 
-    if args.tvm_export:
-        from integrations import tvm_export_model, tvm_compile
+    export(model, dataset, args)
 
-        mod, params = tvm_export_model(model, dataset.get_data_shapes(), model_type)
-        tvm_compile(mod, params, "./tvm_builds")
-        print("TVM compilation finished.")
+    if args.tvm_export:
+        from integrations import tvm_export
+
+        tvm_export(model, dataset)
 
     if writer:
         writer.close()

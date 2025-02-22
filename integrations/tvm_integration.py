@@ -1,9 +1,17 @@
 import tvm
 import torch
 import os
-from tvm import relay
+from tvm import relax, relay
 from tvm.micro import export_model_library_format
 from .utils import extract_tar
+
+
+def tvm_export(model, dataset):
+    model.to("cpu")
+    exported_program = torch.export.export(model, args=(dataset.get_example_input(),))
+    mod, params = tvm_import_pytorch_exported_program_to_relax(exported_program)
+    tvm_compile(mod, params, "./tvm_builds")
+    print("TVM compilation finished.")
 
 
 def tvm_export_model(model, data_shapes, model_type="pytorch"):
@@ -28,6 +36,11 @@ def tvm_import_pytorch_model(model, input_shape, input_name="input0"):
     return mod, params
 
 
+def tvm_import_pytorch_exported_program_to_relax(exported_program):
+    mod, params = relax.frontend.torch.from_exported_program(exported_program)
+    return mod, params
+
+
 def tvm_import_tflite_model(model, shape_dict):
     dtype_dict = {}
     input_type = "int8"
@@ -48,8 +61,8 @@ def tvm_compile(mod, params, build_dir, target=None):
     # Default to C export
     target = tvm.target.Target("c")
 
-    runtime = tvm.relay.backend.Runtime("crt", {"system-lib": False})
-    executor = tvm.relay.backend.Executor(
+    runtime = tvm.relax.backend.Runtime("crt", {"system-lib": False})
+    executor = tvm.relax.backend.Executor(
         "aot", {"unpacked-api": True, "interface-api": "c", "link-params": True}
     )
 
@@ -59,7 +72,7 @@ def tvm_compile(mod, params, build_dir, target=None):
     with tvm.transform.PassContext(
         opt_level=3, config=config, disabled_pass=disable_passes
     ):
-        lib = relay.build(
+        lib = relax.build(
             mod, target=target, runtime=runtime, params=params, executor=executor
         )
 

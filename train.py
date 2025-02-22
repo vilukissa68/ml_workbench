@@ -8,6 +8,7 @@ import os
 from datasets import mnist, cifar10
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
+from export import save_checkpoint
 
 
 def get_optimizer(optimizer_type, model, lr):
@@ -83,11 +84,10 @@ def train(
     lr = args.lr
     optimizer_type = args.optimizer
     verbose = args.verbose
-    batch_size = args.batch_size
     criterion = nn.CrossEntropyLoss()
     optimizer = get_optimizer(args.optimizer, model, lr)
 
-    train_loader, test_loader = dataset.get_data_loaders(args.batch_size)
+    train_loader, test_loader = dataset.get_data_loaders()
 
     model.to(device)
 
@@ -118,14 +118,15 @@ def train(
         # Save checkpoint after each epoch overwriting the previous epochs checkpoint
         save_checkpoint(
             model,
-            optimizer,
-            epoch,
+            args,
+            optimizer=optimizer,
+            optimizer_name=optimizer_type,
+            epoch=epoch,
+            learning_rate=lr,
             model_name=args.model,
             dataset_name=args.dataset,
-            batch_size=batch_size,
+            batch_size=args.batch_size,
             checkpoint_dir=args.checkpoint_dir,
-            quantized=False,
-            pruned=False,
         )
 
     print("Training Complete!")
@@ -134,55 +135,9 @@ def train(
         images, _ = next(iter(train_loader))
         images.to("cpu")
         model.to("cpu")
-        print(images)
         writer.add_graph(model, images)
         writer.flush()
-        writer.close()
         model.to(device)
-
-
-def save_checkpoint(
-    model,
-    optimizer,
-    epoch,
-    model_name,
-    dataset_name,
-    batch_size,
-    checkpoint_dir,
-    quantized=False,
-    pruned=False,
-):
-    # Create the checkpoint directory if it doesn't exist
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
-
-    if quantized:
-        quantization_info = "q"
-    else:
-        quantization_info = "no_q"
-
-    if pruned:
-        pruning_info = "pruned"
-    else:
-        pruning_info = "no_prune"
-
-    checkpoint_filename = f"{model_name}_{dataset_name}_{batch_size}_{epoch+1}_{quantization_info}_{pruning_info}.pth"
-    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
-
-    torch.save(
-        {
-            "model_name": model_name,
-            "epoch": epoch,
-            "quantized": quantized,
-            "pruned": pruned,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-        },
-        checkpoint_path,
-    )
-
-    print(f"Checkpoint saved at {checkpoint_path}")
-    return checkpoint_path
 
 
 def load_checkpoint(model, optimizer, checkpoint_path):
