@@ -29,15 +29,6 @@ class MLPerfTinyKWS(BaseDataset):
         # untar
         self.trainset = None
         self.testset = None
-        self.train_loader = DataLoader(
-            self.trainset, batch_size=self.batch_size, shuffle=self.shuffle
-        )
-        self.test_loader = DataLoader(
-            self.testset, batch_size=self.batch_size, shuffle=False
-        )
-
-    def get_data_loaders(self, batch_size=64, shuffle=True):
-        return self.train_loader, self.test_loader
 
     def get_data_shapes(self):
         return {"input_1": (1, 49, 10, 1)}

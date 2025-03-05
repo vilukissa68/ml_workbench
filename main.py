@@ -14,6 +14,8 @@ from prune import prune_model_global
 from datasets import mnist, cifar10, mlperf_tiny_kws
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
 TIMESTAMP = datetime.now().strftime("%y-%m-%d-%H-%M")
 
@@ -32,11 +34,11 @@ def load_model(model_name, num_classes, args):
 def get_dataset(dataset_name, args):
     dataset_name = dataset_name.lower()
     if dataset_name == "cifar10":
-        return cifar10.CIFAR10(batch_size=args.batch_size)
+        return cifar10.CIFAR10()
     elif dataset_name == "mnist":
-        return mnist.MNIST(batch_size=args.batch_size)
+        return mnist.MNIST()
     elif dataset_name == "mlperftinykws":
-        return mlperf_tiny_kws.MLPerfTinyKWS(batch_size=args.batch_size)
+        return mlperf_tiny_kws.MLPerfTinyKWS()
     else:
         raise Exception(f"No dataset named {dataset_name} found.")
 
@@ -64,7 +66,6 @@ def main():
     print(f"Arguments: {args}")
     args.timestamp = TIMESTAMP
 
-    dataset = get_dataset(args.dataset, args)
 
     writer = None
     if args.tensorboard:
@@ -72,6 +73,11 @@ def main():
         print("Make sure tensorboard is running: tensorboard --logdir=runs")
         run_name = f"{args.model}_{args.dataset}_{args.batch_size}_{TIMESTAMP}"
         writer = SummaryWriter(f"runs/{run_name}")
+
+
+    # Adjust batch_size for distributed training
+    args.batch_size = int(args.batch_size / args.ngpus)
+    dataset = get_dataset(args.dataset, args)
 
     if args.load_checkpoint_path:
         model, model_q, model_type = load_checkpoint(args)
@@ -89,7 +95,17 @@ def main():
                 print("Training model...")
             elif args.fine_tune:
                 print("Fine tuning model...")
-            train(model, dataset, args, writer)
+            if args.distributed_training:
+                args.world_size = args.ngpus * args.nodes
+                # add the ip address to the environment variable so it can be easily avialbale
+                os.environ['MASTER_ADDR'] = args.ip_adress
+                print("ip_adress is", args.ip_adress)
+                os.environ['MASTER_PORT'] = '8888'
+                os.environ['WORLD_SIZE'] = str(args.world_size)
+                # nprocs: number of process which is equal to args.ngpu here
+                mp.spawn(train, nprocs=args.ngpus, args=(model, dataset, args,))
+            else:
+                train(0, model, dataset, args, writer)
         model_type = "pytorch"
 
     # Quantizie fp32, skip if using QAT already

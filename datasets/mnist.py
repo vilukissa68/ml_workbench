@@ -14,7 +14,7 @@ transform = transforms.Compose(
 
 class MNIST(BaseDataset):
     def __init__(self, batch_size=64, shuffle=True):
-        super(BaseDataset, self).__init__(batch_size=batch_size, shuffle=shuffle)
+        super(BaseDataset, self).__init__()
         self.has_labels = False
         load_data()
 
@@ -25,15 +25,6 @@ class MNIST(BaseDataset):
         self.testset = torchvision.datasets.MNIST(
             root="./data", train=False, download=True, transform=transform
         )
-        self.train_loader = DataLoader(
-            self.trainset, batch_size=self.batch_size, shuffle=self.shuffle
-        )
-        self.test_loader = DataLoader(
-            self.testset, batch_size=self.batch_size, shuffle=False
-        )
-
-    def get_data_loaders(self):
-        return self.train_loader, self.test_loader
 
     def get_data_shapes(self):
         return {"input0": (1, 28, 28, 1)}

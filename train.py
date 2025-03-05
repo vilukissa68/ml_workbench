@@ -9,7 +9,9 @@ from datasets import mnist, cifar10
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from export import save_checkpoint
-
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, DistributedSampler
 
 def get_optimizer(optimizer_type, model, lr):
     if optimizer_type == "SGD":
@@ -74,11 +76,32 @@ def evaluate(model, data_loader, criterion, device, verbose=False):
 
 
 def train(
+    gpu,
     model,
     dataset,
     args,
     writer=None,
 ):
+
+    # Set seed
+    torch.manual_seed(args.seed)
+    model.to(args.device)
+
+    args.gpu = gpu
+    rank = args.local_rank * args.ngpus + args.gpu
+    if args.distributed_training:
+        torch.cuda.set_device(args.gpu)
+        dist.init_process_group(
+            backend='nccl',
+            init_method='env://',
+            world_size=args.world_size,
+            rank=rank
+        )
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[args.gpu], find_unused_parameters=True
+        )
+
+
     device = args.device
     num_epochs = args.epochs
     lr = args.lr
@@ -87,7 +110,16 @@ def train(
     criterion = nn.CrossEntropyLoss()
     optimizer = get_optimizer(args.optimizer, model, lr)
 
-    train_loader, test_loader = dataset.get_data_loaders()
+    if args.distributed_training:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset.trainset, num_replicas=args.world_size, rank=rank
+        )
+        test_sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset.trainset, num_replicas=args.world_size, rank=rank
+        )
+        train_loader, test_loader = dataset.get_data_loaders(args.batch_size, train_sampler, test_sampler)
+    else:
+        train_loader, test_loader = dataset.get_data_loaders(args.batch_size)
 
     model.to(device)
 
@@ -107,7 +139,13 @@ def train(
             writer.flush()
 
         # Evaluation
+        if args.distributed_training:
+            dist.barrier()
         test_loss, test_acc = evaluate(model, test_loader, criterion, device, verbose)
+
+        if args.distributed_training:
+            dist.barrier()
+
         print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.2f}%")
 
         if writer:
@@ -138,7 +176,6 @@ def train(
         writer.add_graph(model, images)
         writer.flush()
         model.to(device)
-
 
 def load_checkpoint(model, optimizer, checkpoint_path):
     checkpoint = torch.load(checkpoint_path)

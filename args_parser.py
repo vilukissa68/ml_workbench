@@ -204,4 +204,29 @@ def parse_args():
         help="Flag to export quantized model to TVM.",
     )
 
+    # Distributed training
+    parser.add_argument(
+        "--distributed-training", action="store_true", help="Use DataParallelDistributed training."
+    )
+    parser.add_argument(
+        "--ngpus",
+        type=int,
+        default=1,
+        help="Number of GPUs per node in DPP training",
+    )
+    parser.add_argument(
+        "--nodes",
+        type=int,
+        default=1,
+        help="Total number of nodes per in DPP training",
+    )
+    parser.add_argument(
+        "--local-rank",
+        type=int,
+        default=0,
+        help="Local rank of training node in DPP training. Should be set separately for all nodes [0, num_of_nodes-1].",
+    )
+    parser.add_argument('--ip_adress', type=str, default="127.0.0.1",
+                        help='ip address of the host node')
+
     return parser.parse_args()
