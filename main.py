@@ -103,7 +103,7 @@ def main():
                 os.environ['MASTER_PORT'] = '8888'
                 os.environ['WORLD_SIZE'] = str(args.world_size)
                 # nprocs: number of process which is equal to args.ngpu here
-                mp.spawn(train, nprocs=args.ngpus, args=(model, dataset, args,))
+                mp.spawn(train, nprocs=args.ngpus, args=(model, dataset, args), join=True)
             else:
                 train(0, model, dataset, args, writer)
         model_type = "pytorch"
