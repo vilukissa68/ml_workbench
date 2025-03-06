@@ -83,7 +83,7 @@ def parse_args():
         "--optimizer",
         type=str,
         default="SGD",
-        choices=["SGD", "Adam", "RMSprop"],
+        choices=["SGD", "Adam", "AdamW", "RMSprop"],
         help="Optimizer to use. Default is 'SGD'.",
     )
     parser.add_argument(
@@ -229,4 +229,37 @@ def parse_args():
     parser.add_argument('--ip_adress', type=str, default="127.0.0.1",
                         help='ip address of the host node')
 
+    # Training regularization
+    parser.add_argument(
+        "--reg-lambda",
+        type=float,
+        default=0.01,
+        help="Lambda for regularization.",
+    )
+    parser.add_argument(
+        "--regularization",
+        type=str,
+        default="",
+        choices=["L1", "L2"],
+        help="Lambda for regularization.",
+    )
+    #Optimizer parameters
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="Weight decay for optimizer.",
+    )
+    parser.add_argument(
+        "--optimizer-beta1",
+        type=float,
+        default=None,
+        help="Low coefficient for optimizer beta",
+    )
+    parser.add_argument(
+        "--optimizer-beta2",
+        type=float,
+        default=None,
+        help="High coefficient for optimizer beta",
+    )
     return parser.parse_args()

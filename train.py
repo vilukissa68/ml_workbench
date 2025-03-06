@@ -13,17 +13,25 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
-def get_optimizer(optimizer_type, model, lr):
-    if optimizer_type == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    elif optimizer_type == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+def get_optimizer(model, args):
+    # Ensure both betas are set
+    if args.optimizer_beta1 and args.optimizer_bet2:
+        betas=(args.optimizer_beta1, args.optimizer_beta2)
     else:
-        raise ValueError(f"Optimizer {optimizer_type} is not supported!")
+        betas=(0.9, 0.999)
+
+    if args.optimizer == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay, betas=betas)
+    elif args.optimizer == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+    elif args.optimizer == "AdamW":
+        optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+    else:
+        raise ValueError(f"Optimizer {args.optimizer} is not supported!")
     return optimizer
 
 
-def train_one_epoch(model, data_loader, criterion, optimizer, device, verbose=False):
+def train_one_epoch(model, data_loader, criterion, optimizer, device, regularization="", lambda_reg=0.01, verbose=False):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -36,6 +44,16 @@ def train_one_epoch(model, data_loader, criterion, optimizer, device, verbose=Fa
 
         outputs = model(inputs)
         loss = criterion(outputs, labels)
+        # Apply L1 regularization
+        if regularization == 'L1':
+            l1_norm = sum(p.abs().sum() for p in model.parameters())
+            loss += lambda_reg * l1_norm
+
+        # Apply L2 regularization
+        elif regularization == 'L2':
+            l2_norm = sum(p.pow(2).sum() for p in model.parameters())
+            loss += lambda_reg * l2_norm
+
         loss.backward()
         optimizer.step()
 
@@ -91,7 +109,7 @@ def train(
     optimizer_type = args.optimizer
     verbose = args.verbose
     criterion = nn.CrossEntropyLoss()
-    optimizer = get_optimizer(args.optimizer, model, lr)
+    optimizer = get_optimizer(model, args)
 
     if args.distributed_training:
         rank = args.local_rank * args.ngpus + gpu
@@ -123,7 +141,7 @@ def train(
 
         # Train the model
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, verbose
+            model, train_loader, criterion, optimizer, device, args.regularization, args.reg_lambda, verbose
         )
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.2f}%")
 
