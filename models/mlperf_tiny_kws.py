@@ -3,10 +3,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 
 def mlperf_tiny_kws(num_classes, args):
     model = DS_CNN()
-    model.fc = nn.Linear(model.fc.in_featrues, num_classes)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
 
 class DS_CNN(nn.Module):
@@ -85,6 +86,20 @@ class DS_CNN(nn.Module):
         x = self.avg_pool(x)
         x = self.flatten(x)
         x = self.fc(x)
-        x = F.softmax(x, dim=1)
+        #x = F.softmax(x, dim=1)
 
         return x
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                init.xavier_normal_(m.weight)
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                init.constant_(m.weight, 1)
+                init.constant_(m.bias, 0)
