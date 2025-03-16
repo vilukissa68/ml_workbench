@@ -1,4 +1,3 @@
-from torch.utils.data import Dataset, DataLoader
 from .base_dataset import BaseDataset
 import torchvision.transforms as transforms
 import os
@@ -11,14 +10,15 @@ import glob
 import random
 from collections import Counter
 import matplotlib.pyplot as plt
+from torch.utils.data import Dataset
 
-# transform = transforms.Compose(
-#     [
-#         transforms.Resize((49, 10)),
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5,), (0.5,)),
-#     ]
-# )
+transform = transforms.Compose(
+    [
+        transforms.Resize((49, 10)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
 
 NUM_TRAIN_SAMPLES = -1
 NUM_VAL_SAMPLES = -1
@@ -110,7 +110,7 @@ class MLPerfTinyKWS(BaseDataset):
 
 
 class SpeechCommandsDataset_pytorch(Dataset):
-    def __init__(self, split="train", augment=True):
+    def __init__(self, split="training", augment=True):
         self.split = split
         self.augment = augment
         self.waveforms = []
@@ -129,48 +129,37 @@ class SpeechCommandsDataset_pytorch(Dataset):
         for waveform, sample_rate, label, *_ in dataset:
             waveform = waveform / waveform.abs().max()  # Normalize
             waveform = waveform.squeeze(0)
-            if sample_rate != SAMPLE_RATE:
-                waveform = torchaudio.transforms.Resample(sample_rate, SAMPLE_RATE)(
-                    waveform
-                )
-                print("Resampling to 16kHz")
+
             if len(waveform) < DESIRED_SAMPLES:
                 waveform = torch.nn.functional.pad(waveform, (0, DESIRED_SAMPLES - len(waveform)))
 
-            time_shift_padding_placeholder_ = torch.tensor([2, 2], dtype=torch.int32)
-            time_shift_offset_placeholder_ = torch.tensor([2], dtype=torch.int32)
             waveform = torch.nn.functional.pad(
                 waveform,
                 (
-                    time_shift_padding_placeholder_[0].item(),
-                    time_shift_padding_placeholder_[1].item(),
+                    2,
+                    2
                 ),
                 mode="constant",
             )
 
-            waveform = waveform[
-                time_shift_offset_placeholder_[0]
-                .item() : time_shift_offset_placeholder_[0]
-                .item()
-                + DESIRED_SAMPLES
-            ]
-
+            # Slice
+            waveform = waveform[2 : 2 + DESIRED_SAMPLES]
 
             if label in get_labels():
                 self.waveforms.append(waveform)
                 self.labels.append(get_idx(label))
             else:
+                pass
                 # Add to unknown, keep the same distribution in testing
                 if self.split == "testing":
                     if random.random() < 1/13:
                         self.waveforms.append(waveform)
-                        self.labels.append(get_idx("unknown"))
+                        self.labels.append(int(get_idx("unknown")))
                 else: # Add to unknown in training
                     self.waveforms.append(waveform)
-                    self.labels.append(get_idx("unknown"))
+                    self.labels.append(int(get_idx("unknown")))
 
         silence_count = 0
-        # Add silence 1/12
         if self.split == "training":
             silence_count = int(668)
         else:
@@ -222,24 +211,15 @@ class SpeechCommandsDataset_pytorch(Dataset):
         noise_added = torch.clamp(noise_added, -1.0, 1.0)  # Clamp
         return noise_added
 
-    def get_preprocess_audio_func_pytorch(self, waveform, label=None):
+    def get_preprocess_audio_func_pytorch(self, waveform):
         if self.augment:
             waveform = self.add_background_noise_pytorch(waveform)
-
-        # if torch.max(waveform) == 0.0:
-        #     print("Warning: waveform is all zeros")
-        #     print("On label: ", label)
-        # if torch.max(waveform) > 1.0:
-        #     print("Warning: waveform max value exceeds 1.0")
-        #     print("On label: ", label)
-        # if torch.min(waveform) < -1.0:
-        #     print("Warning: waveform min value exceeds -1.0")
-        #     print("On label: ", label)
 
         # MFCC
         mfcc_transform = MFCC(
             sample_rate=SAMPLE_RATE,
             n_mfcc=DCT_COEFFICIENT_COUNT,
+            dct_type=2,
             log_mels=True,
             melkwargs={
                 "n_fft": WINDOW_SIZE_SAMPLES,
@@ -251,7 +231,12 @@ class SpeechCommandsDataset_pytorch(Dataset):
             },
         )
         mfcc = mfcc_transform(waveform)
-        return torch.reshape(mfcc, (1, SPECTROGRAM_LENGTH, DCT_COEFFICIENT_COUNT))
+        mfcc = torch.transpose(mfcc, 0, 1)
+
+        # Normalize
+        mfcc = (mfcc - mfcc.mean()) / mfcc.std()
+        mfcc = mfcc.unsqueeze(0)
+        return mfcc
 
     def __len__(self):
         return len(self.waveforms)
@@ -259,6 +244,5 @@ class SpeechCommandsDataset_pytorch(Dataset):
     def __getitem__(self, idx):
         waveform = self.waveforms[idx]
         label = self.labels[idx]
-        mfcc_features = self.get_preprocess_audio_func_pytorch(waveform, label)
-        #show_mfcc(mfcc_features.squeeze(0).detach().numpy())
+        mfcc_features = self.get_preprocess_audio_func_pytorch(waveform)
         return mfcc_features, label

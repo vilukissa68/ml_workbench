@@ -126,7 +126,7 @@ def main():
         run_benchmark(args, dataset, model, model_q)
 
     if args.visualize:
-        images, labels = next(iter(test_loader))
+        images, labels = next(iter(dataset.get_data_loaders(args.batch_size)[0]))
         imshow_batch(images, labels=labels, normalize=True)
 
     if args.benchmark:
