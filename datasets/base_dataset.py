@@ -15,7 +15,7 @@ class BaseDataset:
 
     def get_data_loaders(self, batch_size=64, train_sampler=None, test_sampler=None):
         train_loader = DataLoader(
-            self.trainset, batch_size=batch_size, sampler=train_sampler
+            self.trainset, batch_size=batch_size, sampler=train_sampler, shuffle=self.shuffle
         )
         test_loader = DataLoader(
             self.testset, batch_size=batch_size, shuffle=False, sampler=test_sampler

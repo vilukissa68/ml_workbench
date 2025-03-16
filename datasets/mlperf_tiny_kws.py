@@ -1,11 +1,7 @@
 from torch.utils.data import Dataset, DataLoader
 from .base_dataset import BaseDataset
-from .utils import download_file, extract_tar_gz
 import torchvision.transforms as transforms
 import os
-import tensorflow as tf
-import tensorflow_datasets as tfds
-from tensorflow.python.platform import gfile
 import numpy as np
 import torchaudio
 from torchaudio.transforms import MFCC
@@ -13,22 +9,23 @@ import torch
 from pathlib import Path
 import glob
 import random
-import wavfile
+from collections import Counter
+import matplotlib.pyplot as plt
 
-transform = transforms.Compose(
-    [
-        transforms.Resize((49, 10)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),
-    ]
-)
+# transform = transforms.Compose(
+#     [
+#         transforms.Resize((49, 10)),
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.5,), (0.5,)),
+#     ]
+# )
 
 NUM_TRAIN_SAMPLES = -1
 NUM_VAL_SAMPLES = -1
 NUM_TEST_SAMPLES = -1
 NUM_MFCCS = 10
 
-BACKGROUND_FREQUENCY = 0.8
+BACKGROUND_FREQUENCY = 0.1
 BACKGROUND_VOLUME = 0.1
 SAMPLE_RATE = 16000
 WINDOW_SIZE_MS = 30.0
@@ -38,6 +35,7 @@ WINDOW_SIZE_SAMPLES = int(SAMPLE_RATE * WINDOW_SIZE_MS / 1000)
 CLIP_DURATION_MS = 1000
 DESIRED_SAMPLES = int(SAMPLE_RATE * CLIP_DURATION_MS / 1000)  # 16000
 DCT_COEFFICIENT_COUNT = 10
+SILENT_PERCENTAGE = 10.0
 LENGTH_MINUS_WINDOW = DESIRED_SAMPLES - WINDOW_SIZE_SAMPLES
 SPECTROGRAM_LENGTH = 1 + int(LENGTH_MINUS_WINDOW / WINDOW_STRIDE_SAMPLES)
 DATASET_PATH = Path("./data")
@@ -46,51 +44,61 @@ BACKGROUND_NOISE_DIR = (
 )
 
 
+def silence_waveform(desired_samples, noise_std=0.1):
+    noise = torch.randn(desired_samples) * noise_std
+    return noise
+
+def get_labels():
+    word_labels = [
+        "down",
+        "go",
+        "left",
+        "no",
+        "off",
+        "on",
+        "right",
+        "stop",
+        "up",
+        "yes",
+        "silence",
+        "unknown",
+    ]
+    return word_labels
+
+def get_idx(label):
+    if label in get_labels():
+        return get_labels().index(label)
+    else:
+        return get_labels().index("unknown")
+
+def show_mfcc(mfcc):
+    # Plot the MFCC features
+    plt.figure(figsize=(10, 4))
+    plt.imshow(mfcc, cmap='viridis', origin='lower', aspect='auto')
+    plt.title('MFCC Features')
+    plt.xlabel('Time')
+    plt.ylabel('MFCC Coefficient')
+    plt.colorbar(label='MFCC Value')
+    plt.show()
+
 class MLPerfTinyKWS(BaseDataset):
-    def __init__(self, data_path=DATASET_PATH, batch_size=64, shuffle=True):
+    def __init__(self, data_path=DATASET_PATH, batch_size=100, shuffle=True):
         super().__init__(data_path=data_path, batch_size=batch_size, shuffle=shuffle)
         self.has_labels = True
         self.load_data()
 
     def load_data(self):
         print("Loading training data...")
-        # train_dataset = SpeechCommandsDataset_pytorch(split="training", augment=True)
-
-        # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-        print("Loading test data...")
-        test_dataset = SpeechCommandsDataset_pytorch(split="testing", augment=True)
-
-        test_loader = DataLoader(
-            test_dataset, batch_size=self.batch_size, shuffle=False, drop_last=True
-        )
-
-        # self.trainset = train_dataset
+        train_dataset = SpeechCommandsDataset_pytorch(split="training", augment=True)
+        test_dataset = SpeechCommandsDataset_pytorch(split="testing", augment=False)
+        self.trainset = train_dataset
         self.testset = test_dataset
-        print("Data loaded.")
-        # print("Train set size:", len(self.trainset))
-        print("Test set size:", len(self.testset))
-        print("Input:", next(iter(test_loader))[0])
+        print("%d training samples" % len(self.trainset))
+        print("%d testing samples" % len(self.testset))
 
     def get_data_shapes(self):
-        return {"input_1": (1, 49, 10, 1)}
+        return {"input_1": (1, 1, 49, 10)}
 
-    def get_labels(self):
-        word_labels = [
-            "Down",
-            "Go",
-            "Left",
-            "No",
-            "Off",
-            "On",
-            "Right",
-            "Stop",
-            "Up",
-            "Yes",
-            "Silence",
-            "Unknown",
-        ]
-        return word_labels
 
     def get_num_classes(self):
         return 12
@@ -107,9 +115,9 @@ class SpeechCommandsDataset_pytorch(Dataset):
         self.augment = augment
         self.waveforms = []
         self.labels = []
-        self.cache = {}
-        self.use_cache = False
         self.load_data_pytorch()
+        print(set(self.labels))
+        print(Counter(self.labels))
         if self.augment:
             self.background_data = self.prepare_background_data_pytorch()
 
@@ -117,29 +125,71 @@ class SpeechCommandsDataset_pytorch(Dataset):
         dataset = torchaudio.datasets.SPEECHCOMMANDS(
             DATASET_PATH, download=True, subset=self.split
         )
-        print("Dataset length:", len(dataset))
 
         for waveform, sample_rate, label, *_ in dataset:
+            waveform = waveform / waveform.abs().max()  # Normalize
+            waveform = waveform.squeeze(0)
             if sample_rate != SAMPLE_RATE:
-                print("Resampling...")
                 waveform = torchaudio.transforms.Resample(sample_rate, SAMPLE_RATE)(
                     waveform
                 )
-            self.waveforms.append(waveform)
-            self.labels.append(label)
+                print("Resampling to 16kHz")
+            if len(waveform) < DESIRED_SAMPLES:
+                waveform = torch.nn.functional.pad(waveform, (0, DESIRED_SAMPLES - len(waveform)))
+
+            time_shift_padding_placeholder_ = torch.tensor([2, 2], dtype=torch.int32)
+            time_shift_offset_placeholder_ = torch.tensor([2], dtype=torch.int32)
+            waveform = torch.nn.functional.pad(
+                waveform,
+                (
+                    time_shift_padding_placeholder_[0].item(),
+                    time_shift_padding_placeholder_[1].item(),
+                ),
+                mode="constant",
+            )
+
+            waveform = waveform[
+                time_shift_offset_placeholder_[0]
+                .item() : time_shift_offset_placeholder_[0]
+                .item()
+                + DESIRED_SAMPLES
+            ]
+
+
+            if label in get_labels():
+                self.waveforms.append(waveform)
+                self.labels.append(get_idx(label))
+            else:
+                # Add to unknown, keep the same distribution in testing
+                if self.split == "testing":
+                    if random.random() < 1/13:
+                        self.waveforms.append(waveform)
+                        self.labels.append(get_idx("unknown"))
+                else: # Add to unknown in training
+                    self.waveforms.append(waveform)
+                    self.labels.append(get_idx("unknown"))
+
+        silence_count = 0
+        # Add silence 1/12
+        if self.split == "training":
+            silence_count = int(668)
+        else:
+            silence_count = int(408)
+
+        for _ in range(silence_count):
+            self.waveforms.append(silence_waveform(DESIRED_SAMPLES))
+            self.labels.append(get_idx("silence"))
 
     def prepare_background_data_pytorch(self):
-        print("Preparing background data...")
         background_data = []
         if not os.path.exists(BACKGROUND_NOISE_DIR):
             print("No background noise found in " + BACKGROUND_NOISE_DIR)
             return background_data
 
         search_path = os.path.join(BACKGROUND_NOISE_DIR, "*.wav")
-        print("Extracting background data...")
         for wav_path in glob.glob(search_path):
             # Load the audio file
-            waveform, sample_rate = torchaudio.load(wav_path)
+            waveform, sample_rate = torchaudio.load(wav_path, normalize=False)
             # Append the raw audio data to the background_data list
             background_data.append((waveform.squeeze().numpy(), sample_rate))
 
@@ -152,53 +202,39 @@ class SpeechCommandsDataset_pytorch(Dataset):
             print("No background noise found.")
             return waveform
 
-        print("Adding background noise...")
         noise, sr = random.choice(self.background_data)
-        print("Noise shape:", noise.shape)
-        noise = torch.tensor(noise, dtype=torch.float32) / 32768.0
+        noise = torch.tensor(noise, dtype=torch.float32)
+        noise = noise / noise.abs().max()  # Normalize
         if sr != SAMPLE_RATE:
+            print("Resampling background noise")
             noise = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(noise)
 
-        print("Noise shape:", noise.shape)
-        noise = noise[: waveform.shape[0]]  # Trim or pad noise
-        noise *= random.uniform(0, 0.1)  # Scale noise
-        return waveform + noise
+        if len(noise) < len(waveform):
+            noise = torch.nn.functional.pad(noise, (0, len(waveform) - len(noise)))
+        if len(noise) > len(waveform):
+            noise = noise[: len(waveform)]
 
-    def get_preprocess_audio_func_pytorch(self, waveform):
-        print("Preprocessing audio...")
-        waveform = waveform.squeeze(0)
-        print("Waveform shape:", waveform.shape)
-        waveform.float()  # Ensure int16
-        waveform = waveform / waveform.abs().max()  # Normalize
+        background_volume = 0.0
+        if np.random.uniform(0,1) < BACKGROUND_FREQUENCY:
+            background_volume = np.random.uniform(0, BACKGROUND_VOLUME)
+        noise = noise * background_volume
+        noise_added = waveform + noise
+        noise_added = torch.clamp(noise_added, -1.0, 1.0)  # Clamp
+        return noise_added
 
-        # Pad to desired length
-        if waveform.shape[-1] < DESIRED_SAMPLES:
-            waveform = torch.nn.functional.pad(
-                waveform, (0, DESIRED_SAMPLES - waveform.shape[-1])
-            )
-        elif waveform.shape[-1] > DESIRED_SAMPLES:
-            waveform = waveform[:DESIRED_SAMPLES]
-        print("Padded waveform shape:", waveform.shape)
-
-        time_shift_padding_placeholder_ = torch.tensor([2, 2], dtype=torch.int32)
-        time_shift_offset_placeholder_ = torch.tensor([2], dtype=torch.int32)
-        waveform = torch.nn.functional.pad(
-            waveform,
-            (
-                time_shift_padding_placeholder_[0].item(),
-                time_shift_padding_placeholder_[1].item(),
-            ),
-        )
-        waveform = waveform[
-            time_shift_offset_placeholder_[0]
-            .item() : time_shift_offset_placeholder_[0]
-            .item()
-            + DESIRED_SAMPLES
-        ]
-        print("Padded waveform shape:", waveform.shape)
-
+    def get_preprocess_audio_func_pytorch(self, waveform, label=None):
         if self.augment:
             waveform = self.add_background_noise_pytorch(waveform)
+
+        # if torch.max(waveform) == 0.0:
+        #     print("Warning: waveform is all zeros")
+        #     print("On label: ", label)
+        # if torch.max(waveform) > 1.0:
+        #     print("Warning: waveform max value exceeds 1.0")
+        #     print("On label: ", label)
+        # if torch.min(waveform) < -1.0:
+        #     print("Warning: waveform min value exceeds -1.0")
+        #     print("On label: ", label)
 
         # MFCC
         mfcc_transform = MFCC(
@@ -209,14 +245,13 @@ class SpeechCommandsDataset_pytorch(Dataset):
                 "n_fft": WINDOW_SIZE_SAMPLES,
                 "hop_length": WINDOW_STRIDE_SAMPLES,
                 "n_mels": 40,
-                "f_min": 20,
-                "f_max": 4000,
+                "f_min": 20.0,
+                "f_max": 4000.0,
                 "center": False,
             },
         )
         mfcc = mfcc_transform(waveform)
-        print("MFCC shape:", mfcc.shape)
-        return torch.reshape(mfcc, (1, SPECTROGRAM_LENGTH, DCT_COEFFICIENT_COUNT, 1))
+        return torch.reshape(mfcc, (1, SPECTROGRAM_LENGTH, DCT_COEFFICIENT_COUNT))
 
     def __len__(self):
         return len(self.waveforms)
@@ -224,13 +259,6 @@ class SpeechCommandsDataset_pytorch(Dataset):
     def __getitem__(self, idx):
         waveform = self.waveforms[idx]
         label = self.labels[idx]
-
-        # Check if MFCC features are cached
-        if str(idx) in self.cache and self.use_cache:
-            mfcc_features = self.cache[str(idx)]
-        else:
-            # Cache MFCC features
-            mfcc_features = self.get_preprocess_audio_func_pytorch(waveform)
-            if self.use_cache:
-                self.cache[str(idx)] = mfcc_features
+        mfcc_features = self.get_preprocess_audio_func_pytorch(waveform, label)
+        #show_mfcc(mfcc_features.squeeze(0).detach().numpy())
         return mfcc_features, label
