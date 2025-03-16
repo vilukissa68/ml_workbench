@@ -44,9 +44,6 @@ class DS_CNN(nn.Module):
         self.flatten = nn.Flatten()
         self.fc = nn.Linear(64, 12, bias=True)
 
-        # Initialize weights
-        self._initialize_weights()
-
     def forward(self, x):
         # Add padding
         x = F.pad(x, (1, 1, 4, 5), "constant", 0.0)
@@ -91,16 +88,3 @@ class DS_CNN(nn.Module):
 
         return x
 
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                init.xavier_normal_(m.weight)
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
