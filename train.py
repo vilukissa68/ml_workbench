@@ -23,16 +23,31 @@ def get_optimizer(model, args):
     if args.optimizer == "SGD":
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay, betas=betas)
     elif args.optimizer == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+        #optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == "AdamW":
         optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
     else:
         raise ValueError(f"Optimizer {args.optimizer} is not supported!")
-    return optimizer
 
+
+    if args.scheduler == "StepLR":
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step_size, gamma=args.scheduler_gamma)
+    elif args.scheduler == "MultiStepLR":
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10, 15], gamma=args.scheduler_gamma)
+    elif args.scheduler == "ReduceLROnPlateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
+    # elif args.scheduler == "LambdaLR":
+    #     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=schedule_func)
+    else:
+        print("No scheduler")
+        scheduler = None
+
+
+    return optimizer, scheduler
 
 def train_one_epoch(model, data_loader, criterion, optimizer, device, regularization="", lambda_reg=0.01, verbose=False):
-    model.train()
+    model.train(True)
     running_loss = 0.0
     correct = 0
     total = 0
@@ -109,7 +124,7 @@ def train(
     optimizer_type = args.optimizer
     verbose = args.verbose
     criterion = nn.CrossEntropyLoss()
-    optimizer = get_optimizer(model, args)
+    optimizer, scheduler = get_optimizer(model, args)
 
     if args.distributed_training:
         rank = args.local_rank * args.ngpus + gpu
@@ -175,6 +190,12 @@ def train(
             batch_size=args.batch_size,
             checkpoint_dir=args.checkpoint_dir,
         )
+
+        # Update the learning rate
+        if scheduler:
+            scheduler.step()
+            if args.verbose:
+                print(f"New scheduled learning rate: {scheduler.get_last_lr()}")
 
     print("Training Complete!")
 

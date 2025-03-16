@@ -90,6 +90,29 @@ def parse_args():
         "--lr", type=float, default=0.001, help="Learning rate. Default is 0.001."
     )
 
+    # Scheduler options
+    parser.add_argument(
+        "--scheduler",
+        type=str,
+        default="",
+        choices=["StepLR", "MultiStepLR", "ReduceLROnPlateau", "LambdaLR"],
+        help="Scheduler to use. Default is 'StepLR'.",
+    )
+
+    parser.add_argument(
+        "--scheduler-step-size",
+        type=int,
+        default=12,
+        help="Step size for the scheduler. Default is 7.",
+        )
+
+    parser.add_argument(
+        "--scheduler-gamma",
+        type=float,
+        default=0.000005,
+        help="Gamma for the scheduler. Default is 0.1.",
+        )
+
     # Quantization options
     parser.add_argument(
         "--quantize",
@@ -247,7 +270,7 @@ def parse_args():
     parser.add_argument(
         "--weight-decay",
         type=float,
-        default=None,
+        default=0.0,
         help="Weight decay for optimizer.",
     )
     parser.add_argument(
