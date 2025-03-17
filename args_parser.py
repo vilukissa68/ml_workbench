@@ -77,6 +77,21 @@ def parse_args():
         choices=get_available_datasets(),
         help="Dataset to use for training. Default is 'CIFAR10'.",
     )
+    # Loss options
+    parser.add_argument(
+        "--criterion",
+        type=str,
+        default="CrossEntropyLoss",
+        choices=[
+            "CrossEntropyLoss",
+            "MSELoss",
+            "L1Loss",
+            "NLLLoss",
+            "BCELoss",
+            "BCEWithLogitsLoss",
+        ],
+        help="Critetion/Loss function used for training.",
+    )
 
     # Optimizer options
     parser.add_argument(
@@ -152,8 +167,6 @@ def parse_args():
         default="./checkpoints",
         help="Path to save model checkpoints. If None, no checkpoints are saved.",
     )
-
-    # Checkpoint options
     parser.add_argument(
         "--load-checkpoint-path",
         type=str,

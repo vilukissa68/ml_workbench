@@ -77,6 +77,23 @@ def get_optimizer(model, args):
     return optimizer, scheduler
 
 
+def get_criterion(criterion):
+    if criterion == "CrossEntropyLoss":
+        return nn.CrossEntropyLoss()
+    elif criterion == "MSELoss":
+        return nn.MSELoss()
+    elif criterion == "L1Loss":
+        return nn.L1Loss()
+    elif criterion == "NLLLoss":
+        return nn.NLLLoss()
+    elif criterion == "BCELoss":
+        return nn.BCELoss()
+    elif criterion == "BCEWithLogitsLoss":
+        return nn.BCEWithLogitsLoss()
+    else:
+        raise Exception("Error:{criterion} is not a valid critetion!".format(criterion))
+
+
 def train_one_epoch(
     model,
     data_loader,
@@ -164,8 +181,11 @@ def train(
     lr = args.lr
     optimizer_type = args.optimizer
     verbose = args.verbose
-    criterion = nn.CrossEntropyLoss()
+    criterion = get_criterion(args.criterion)
     optimizer, scheduler = get_optimizer(model, args)
+
+    if args.verbose:
+        print("Training on", device)
 
     if args.distributed_training:
         rank = args.local_rank * args.ngpus + gpu
@@ -248,7 +268,8 @@ def train(
             if args.verbose:
                 print(f"New scheduled learning rate: {scheduler.get_last_lr()}")
 
-    print("Training Complete!")
+    if verbose:
+        print("Training Complete!")
 
     if writer:
         images, _ = next(iter(train_loader))
