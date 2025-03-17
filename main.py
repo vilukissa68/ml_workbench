@@ -17,6 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import torch.distributed as dist
 
+torch.multiprocessing.set_sharing_strategy("file_system")
+
 TIMESTAMP = datetime.now().strftime("%y-%m-%d-%H-%M")
 
 
@@ -66,14 +68,12 @@ def main():
     print(f"Arguments: {args}")
     args.timestamp = TIMESTAMP
 
-
     writer = None
     if args.tensorboard:
         print("Tensorboard loggin enabled.")
         print("Make sure tensorboard is running: tensorboard --logdir=runs")
         run_name = f"{args.model}_{args.dataset}_{args.batch_size}_{TIMESTAMP}"
         writer = SummaryWriter(f"runs/{run_name}")
-
 
     # Adjust batch_size for distributed training
     args.batch_size = int(args.batch_size / args.ngpus)
@@ -98,12 +98,14 @@ def main():
             if args.distributed_training:
                 args.world_size = args.ngpus * args.nodes
                 # add the ip address to the environment variable so it can be easily avialbale
-                os.environ['MASTER_ADDR'] = args.ip_adress
+                os.environ["MASTER_ADDR"] = args.ip_adress
                 print("ip_adress is", args.ip_adress)
-                os.environ['MASTER_PORT'] = '8888'
-                os.environ['WORLD_SIZE'] = str(args.world_size)
+                os.environ["MASTER_PORT"] = "8888"
+                os.environ["WORLD_SIZE"] = str(args.world_size)
                 # nprocs: number of process which is equal to args.ngpu here
-                mp.spawn(train, nprocs=args.ngpus, args=(model, dataset, args), join=True)
+                mp.spawn(
+                    train, nprocs=args.ngpus, args=(model, dataset, args), join=True
+                )
             else:
                 train(0, model, dataset, args, writer)
         model_type = "pytorch"

@@ -13,44 +13,85 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
+
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
+
+
+def is_main_process():
+    if not is_dist_avail_and_initialized():
+        return True
+    rank = dist.get_rank()
+    return rank == 0
+
+
 def get_optimizer(model, args):
     # Ensure both betas are set
     if args.optimizer_beta1 and args.optimizer_bet2:
-        betas=(args.optimizer_beta1, args.optimizer_beta2)
+        betas = (args.optimizer_beta1, args.optimizer_beta2)
     else:
-        betas=(0.9, 0.999)
+        betas = (0.9, 0.999)
 
     if args.optimizer == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay, betas=betas)
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=0.9,
+            weight_decay=args.weight_decay,
+            betas=betas,
+        )
     elif args.optimizer == "Adam":
-        #optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        # optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+        optimizer = optim.Adam(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
     elif args.optimizer == "AdamW":
-        optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+        optimizer = optim.AdamW(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas
+        )
     else:
         raise ValueError(f"Optimizer {args.optimizer} is not supported!")
 
-
     if args.scheduler == "StepLR":
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step_size, gamma=args.scheduler_gamma)
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=args.scheduler_step_size, gamma=args.scheduler_gamma
+        )
     elif args.scheduler == "MultiStepLR":
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10, 15], gamma=args.scheduler_gamma)
+        scheduler = optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=[5, 10, 15], gamma=args.scheduler_gamma
+        )
     elif args.scheduler == "ReduceLROnPlateau":
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.1, patience=10, verbose=True
+        )
     # elif args.scheduler == "LambdaLR":
     #     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=schedule_func)
     else:
         print("No scheduler")
         scheduler = None
 
-
     return optimizer, scheduler
 
-def train_one_epoch(model, data_loader, criterion, optimizer, device, regularization="", lambda_reg=0.01, verbose=False):
+
+def train_one_epoch(
+    model,
+    data_loader,
+    criterion,
+    optimizer,
+    device,
+    regularization="",
+    lambda_reg=0.01,
+    verbose=False,
+):
     model.train(True)
     running_loss = 0.0
     correct = 0
     total = 0
+    torch.cuda.empty_cache()
 
     for inputs, labels in tqdm(data_loader, desc="Training", disable=not verbose):
         inputs, labels = inputs.to(device), labels.to(device)
@@ -60,12 +101,12 @@ def train_one_epoch(model, data_loader, criterion, optimizer, device, regulariza
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         # Apply L1 regularization
-        if regularization == 'L1':
+        if regularization == "L1":
             l1_norm = sum(p.abs().sum() for p in model.parameters())
             loss += lambda_reg * l1_norm
 
         # Apply L2 regularization
-        elif regularization == 'L2':
+        elif regularization == "L2":
             l2_norm = sum(p.pow(2).sum() for p in model.parameters())
             loss += lambda_reg * l2_norm
 
@@ -131,10 +172,7 @@ def train(
         model.cuda(gpu)
         torch.cuda.set_device(gpu)
         dist.init_process_group(
-            backend='nccl',
-            init_method='env://',
-            world_size=args.world_size,
-            rank=rank
+            backend="nccl", init_method="env://", world_size=args.world_size, rank=rank
         )
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[gpu], find_unused_parameters=False
@@ -161,7 +199,14 @@ def train(
 
         # Train the model
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, args.regularization, args.reg_lambda, verbose
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            args.regularization,
+            args.reg_lambda,
+            verbose,
         )
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.2f}%")
 
@@ -183,18 +228,19 @@ def train(
         # Save checkpoint after each epoch overwriting the previous epochs checkpoint
         if args.distributed_training:
             dist.barrier()
-        save_checkpoint(
-            model,
-            args,
-            optimizer=optimizer,
-            optimizer_name=optimizer_type,
-            epoch=epoch,
-            learning_rate=lr,
-            model_name=args.model,
-            dataset_name=args.dataset,
-            batch_size=args.batch_size,
-            checkpoint_dir=args.checkpoint_dir,
-        )
+        if is_main_process():
+            save_checkpoint(
+                model,
+                args,
+                optimizer=optimizer,
+                optimizer_name=optimizer_type,
+                epoch=epoch,
+                learning_rate=lr,
+                model_name=args.model,
+                dataset_name=args.dataset,
+                batch_size=args.batch_size,
+                checkpoint_dir=args.checkpoint_dir,
+            )
 
         # Update the learning rate
         if scheduler:
@@ -214,6 +260,7 @@ def train(
 
     if args.distributed_training:
         dist.destroy_process_group()
+
 
 def load_checkpoint(model, optimizer, checkpoint_path):
     checkpoint = torch.load(checkpoint_path)
