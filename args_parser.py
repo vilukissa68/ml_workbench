@@ -104,14 +104,14 @@ def parse_args():
         type=int,
         default=12,
         help="Step size for the scheduler. Default is 7.",
-        )
+    )
 
     parser.add_argument(
         "--scheduler-gamma",
         type=float,
         default=0.000005,
         help="Gamma for the scheduler. Default is 0.1.",
-        )
+    )
 
     # Quantization options
     parser.add_argument(
@@ -229,7 +229,9 @@ def parse_args():
 
     # Distributed training
     parser.add_argument(
-        "--distributed-training", action="store_true", help="Use DataParallelDistributed training."
+        "--distributed-training",
+        action="store_true",
+        help="Use DataParallelDistributed training.",
     )
     parser.add_argument(
         "--ngpus",
@@ -249,8 +251,16 @@ def parse_args():
         default=0,
         help="Local rank of training node in DPP training. Should be set separately for all nodes [0, num_of_nodes-1].",
     )
-    parser.add_argument('--ip_adress', type=str, default="127.0.0.1",
-                        help='ip address of the host node')
+
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="Sets number of parallel workers in data loaders",
+    )
+    parser.add_argument(
+        "--ip_adress", type=str, default="127.0.0.1", help="ip address of the host node"
+    )
 
     # Training regularization
     parser.add_argument(
@@ -266,7 +276,7 @@ def parse_args():
         choices=["L1", "L2"],
         help="Lambda for regularization.",
     )
-    #Optimizer parameters
+    # Optimizer parameters
     parser.add_argument(
         "--weight-decay",
         type=float,

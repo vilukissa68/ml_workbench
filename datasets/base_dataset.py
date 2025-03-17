@@ -1,5 +1,6 @@
 from torch.utils.data import DataLoader
 
+
 class BaseDataset:
     def __init__(self, data_path="./data", transform=None, batch_size=64, shuffle=True):
         self.data_path = data_path
@@ -13,12 +14,28 @@ class BaseDataset:
     def load_data(self):
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def get_data_loaders(self, batch_size=64, train_sampler=None, test_sampler=None):
+    def get_data_loaders(
+        self, batch_size=64, train_sampler=None, test_sampler=None, num_workers=0
+    ):
+        if train_sampler:
+            shuffle = False
+        else:
+            shuffle = self.shuffle
         train_loader = DataLoader(
-            self.trainset, batch_size=batch_size, sampler=train_sampler, shuffle=self.shuffle
+            self.trainset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            pin_memory=True,
         )
         test_loader = DataLoader(
-            self.testset, batch_size=batch_size, shuffle=False, sampler=test_sampler
+            self.testset,
+            batch_size=batch_size,
+            shuffle=False,
+            sampler=test_sampler,
+            num_workers=num_workers,
+            pin_memory=True,
         )
         return train_loader, test_loader
 

@@ -145,9 +145,14 @@ def train(
         test_sampler = torch.utils.data.distributed.DistributedSampler(
             dataset.trainset, num_replicas=args.world_size, rank=rank
         )
-        train_loader, test_loader = dataset.get_data_loaders(args.batch_size, train_sampler, None)
+        train_loader, test_loader = dataset.get_data_loaders(
+            args.batch_size, train_sampler, None, 0
+        )
+        print("Rank:", dist.get_rank())
     else:
-        train_loader, test_loader = dataset.get_data_loaders(args.batch_size)
+        train_loader, test_loader = dataset.get_data_loaders(
+            args.batch_size, None, None, args.num_workers
+        )
         model.to(device)
 
     # Training loop
