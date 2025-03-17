@@ -48,6 +48,7 @@ def silence_waveform(desired_samples, noise_std=0.1):
     noise = torch.randn(desired_samples) * noise_std
     return noise
 
+
 def get_labels():
     word_labels = [
         "down",
@@ -65,48 +66,80 @@ def get_labels():
     ]
     return word_labels
 
+
 def get_idx(label):
     if label in get_labels():
         return get_labels().index(label)
     else:
         return get_labels().index("unknown")
 
+
 def show_mfcc(mfcc):
     # Plot the MFCC features
     plt.figure(figsize=(10, 4))
-    plt.imshow(mfcc, cmap='viridis', origin='lower', aspect='auto')
-    plt.title('MFCC Features')
-    plt.xlabel('Time')
-    plt.ylabel('MFCC Coefficient')
-    plt.colorbar(label='MFCC Value')
+    plt.imshow(mfcc, cmap="viridis", origin="lower", aspect="auto")
+    plt.title("MFCC Features")
+    plt.xlabel("Time")
+    plt.ylabel("MFCC Coefficient")
+    plt.colorbar(label="MFCC Value")
     plt.show()
+
 
 class MLPerfTinyKWS(BaseDataset):
     def __init__(self, data_path=DATASET_PATH, batch_size=100, shuffle=True):
         super().__init__(data_path=data_path, batch_size=batch_size, shuffle=shuffle)
         self.has_labels = True
-        self.load_data()
 
-    def load_data(self):
-        print("Loading training data...")
-        train_dataset = SpeechCommandsDataset_pytorch(split="training", augment=True)
-        test_dataset = SpeechCommandsDataset_pytorch(split="testing", augment=False)
-        self.trainset = train_dataset
-        self.testset = test_dataset
-        print("%d training samples" % len(self.trainset))
-        print("%d testing samples" % len(self.testset))
+    def load_data(self, sets=["train", "test", "val"]):
+        if "train" in sets and not self.data_loaded[0]:
+            print("Loading training set...")
+            train_dataset = SpeechCommandsDataset_pytorch(
+                split="training", augment=True
+            )
+            self.trainset = train_dataset
+            print("%d training samples" % len(self.trainset))
+
+        if "test" in sets and not self.data_loaded[1]:
+            print("Loading testing set...")
+            test_dataset = SpeechCommandsDataset_pytorch(split="testing", augment=False)
+            self.testset = test_dataset
+            print("%d testing samples" % len(self.testset))
+
+        if "val" in sets and not self.data_loaded[2]:
+            print("Loading validation set...")
+            val_dataset = SpeechCommandsDataset_pytorch(
+                split="validation", augment=False
+            )
+            self.valset = val_dataset
+            print("%d validation samples" % len(self.valset))
+
+        self.data_loaded = (
+            self.trainset is not None,
+            self.testset is not None,
+            self.valset is not None,
+        )
 
     def get_data_shapes(self):
         return {"input_1": (1, 1, 49, 10)}
 
-
     def get_num_classes(self):
         return 12
 
-    def get_example_input(self, num=1):
-        example = self.trainset[0][0]
-        print(example)
-        return example
+    def get_labels(self):
+        return [
+            "down",
+            "go",
+            "left",
+            "no",
+            "off",
+            "on",
+            "right",
+            "stop",
+            "up",
+            "yes",
+            "silence",
+            "unknown",
+        ]
 
 
 class SpeechCommandsDataset_pytorch(Dataset):
@@ -131,14 +164,13 @@ class SpeechCommandsDataset_pytorch(Dataset):
             waveform = waveform.squeeze(0)
 
             if len(waveform) < DESIRED_SAMPLES:
-                waveform = torch.nn.functional.pad(waveform, (0, DESIRED_SAMPLES - len(waveform)))
+                waveform = torch.nn.functional.pad(
+                    waveform, (0, DESIRED_SAMPLES - len(waveform))
+                )
 
             waveform = torch.nn.functional.pad(
                 waveform,
-                (
-                    2,
-                    2
-                ),
+                (2, 2),
                 mode="constant",
             )
 
@@ -152,10 +184,10 @@ class SpeechCommandsDataset_pytorch(Dataset):
                 pass
                 # Add to unknown, keep the same distribution in testing
                 if self.split == "testing":
-                    if random.random() < 1/13:
+                    if random.random() < 1 / 13:
                         self.waveforms.append(waveform)
                         self.labels.append(int(get_idx("unknown")))
-                else: # Add to unknown in training
+                else:  # Add to unknown in training
                     self.waveforms.append(waveform)
                     self.labels.append(int(get_idx("unknown")))
 
@@ -204,7 +236,7 @@ class SpeechCommandsDataset_pytorch(Dataset):
             noise = noise[: len(waveform)]
 
         background_volume = 0.0
-        if np.random.uniform(0,1) < BACKGROUND_FREQUENCY:
+        if np.random.uniform(0, 1) < BACKGROUND_FREQUENCY:
             background_volume = np.random.uniform(0, BACKGROUND_VOLUME)
         noise = noise * background_volume
         noise_added = waveform + noise

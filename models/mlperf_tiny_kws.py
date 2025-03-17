@@ -2,41 +2,84 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 
+
 def mlperf_tiny_kws(num_classes, args):
     model = DS_CNN()
     model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
+
 
 class DS_CNN(nn.Module):
     def __init__(self):
         super(DS_CNN, self).__init__()
         self.input_shape = [49, 10, 1]
         self.filters = 64
-        self.final_pool_size = (int(self.input_shape[0] / 2), int(self.input_shape[1] / 2))
+        self.final_pool_size = (
+            int(self.input_shape[0] / 2),
+            int(self.input_shape[1] / 2),
+        )
 
         # Model layers
-        self.conv1 = nn.Conv2d(1, self.filters, kernel_size=(10, 4), stride=(2, 2), padding=(0), bias=True)
+        self.conv1 = nn.Conv2d(
+            1, self.filters, kernel_size=(10, 4), stride=(2, 2), padding=(0), bias=True
+        )
         self.bn1 = nn.BatchNorm2d(self.filters)
         self.dropout1 = nn.Dropout(0.2)
 
-        self.dw_conv1 = nn.Conv2d(self.filters, self.filters, kernel_size=(3, 3), padding="same", groups=self.filters, bias=True)
+        self.dw_conv1 = nn.Conv2d(
+            self.filters,
+            self.filters,
+            kernel_size=(3, 3),
+            padding=(1, 1),
+            groups=self.filters,
+            bias=True,
+        )
         self.bn2 = nn.BatchNorm2d(self.filters)
-        self.pw_conv1 = nn.Conv2d(self.filters, self.filters, kernel_size=(1, 1), padding="same",bias=True)
+        self.pw_conv1 = nn.Conv2d(
+            self.filters, self.filters, kernel_size=(1, 1), padding=(0, 0), bias=True
+        )
         self.bn3 = nn.BatchNorm2d(self.filters)
 
-        self.dw_conv2 = nn.Conv2d(self.filters, self.filters, kernel_size=(3, 3), padding="same", groups=self.filters,bias=True)
+        self.dw_conv2 = nn.Conv2d(
+            self.filters,
+            self.filters,
+            kernel_size=(3, 3),
+            padding=(1, 1),
+            groups=self.filters,
+            bias=True,
+        )
         self.bn4 = nn.BatchNorm2d(self.filters)
-        self.pw_conv2 = nn.Conv2d(self.filters, self.filters, kernel_size=(1, 1), padding="same", bias=True)
+        self.pw_conv2 = nn.Conv2d(
+            self.filters, self.filters, kernel_size=(1, 1), padding=(0, 0), bias=True
+        )
         self.bn5 = nn.BatchNorm2d(self.filters)
 
-        self.dw_conv3 = nn.Conv2d(self.filters, self.filters, kernel_size=(3, 3), padding="same", groups=self.filters, bias=True)
+        self.dw_conv3 = nn.Conv2d(
+            self.filters,
+            self.filters,
+            kernel_size=(3, 3),
+            padding=(1, 1),
+            groups=self.filters,
+            bias=True,
+        )
         self.bn6 = nn.BatchNorm2d(self.filters)
-        self.pw_conv3 = nn.Conv2d(self.filters, self.filters, kernel_size=(1, 1), padding="same", bias=True)
+        self.pw_conv3 = nn.Conv2d(
+            self.filters, self.filters, kernel_size=(1, 1), padding=(0, 0), bias=True
+        )
         self.bn7 = nn.BatchNorm2d(self.filters)
 
-        self.dw_conv4 = nn.Conv2d(self.filters, self.filters, kernel_size=(3, 3), padding="same", groups=self.filters, bias=True)
+        self.dw_conv4 = nn.Conv2d(
+            self.filters,
+            self.filters,
+            kernel_size=(3, 3),
+            padding=(1, 1),
+            groups=self.filters,
+            bias=True,
+        )
         self.bn8 = nn.BatchNorm2d(self.filters)
-        self.pw_conv4 = nn.Conv2d(self.filters, self.filters, kernel_size=(1, 1), padding="same", bias=True)
+        self.pw_conv4 = nn.Conv2d(
+            self.filters, self.filters, kernel_size=(1, 1), padding=(0, 0), bias=True
+        )
         self.bn9 = nn.BatchNorm2d(self.filters)
 
         self.dropout2 = nn.Dropout(0.4)
@@ -84,7 +127,6 @@ class DS_CNN(nn.Module):
         x = self.avg_pool(x)
         x = self.flatten(x)
         x = self.fc(x)
-        #x = F.softmax(x, dim=1)
+        # x = F.softmax(x, dim=1)
 
         return x
-
