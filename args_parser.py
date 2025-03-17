@@ -316,4 +316,19 @@ def parse_args():
         default=None,
         help="High coefficient for optimizer beta",
     )
+
+    # Plotting options
+    parser.add_argument(
+        "--plot-color-palette",
+        type=str,
+        default="magma",
+        help="Color palette to use for plotting.",
+    )
+    parser.add_argument(
+        "--plot-style",
+        type=str,
+        default="whitegrid",
+        choices=["whitegrid", "darkgrid", "white", "dark", "ticks"],
+        help="Style to use for plotting.",
+    )
     return parser.parse_args()

@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 
 
 def plot_confusion_matrix_to_tensorboard(
-    y_true, y_pred, class_names, writer, global_step
+    y_true, y_pred, class_names, writer, global_step, args
 ):
     """
     Plots a confusion matrix and logs it to TensorBoard.
@@ -30,14 +30,15 @@ def plot_confusion_matrix_to_tensorboard(
 
     # Create a figure to plot the confusion matrix
     fig, ax = plt.subplots(figsize=(10, 8))
+
     sns.heatmap(
         cm_normalized,
         annot=True,
         fmt=".2f",
-        cmap="Blues",
         xticklabels=class_names,
         yticklabels=class_names,
         ax=ax,
+        cmap=args.plot_color_palette,
     )
 
     # Set labels
@@ -61,7 +62,43 @@ def plot_confusion_matrix_to_tensorboard(
     writer.add_image("Confusion Matrix", img_tensor, global_step)
 
 
-def imshow_batch(images, labels=None, normalize=False):
+def plot_confusion_matrix(y_true, y_pred, class_names, args, title="Confusion Matrix"):
+    """
+    Plots a confusion matrix.
+
+    Args:
+    - y_true (list or torch.Tensor): Ground truth labels.
+    - y_pred (list or torch.Tensor): Predicted labels.
+    - class_names (list
+    """
+    # Calculate the confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Normalize the confusion matrix (optional)
+    cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+
+    # Create a figure to plot the confusion matrix
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(
+        cm_normalized,
+        annot=True,
+        fmt=".2f",
+        xticklabels=class_names,
+        yticklabels=class_names,
+        ax=ax,
+        cmap=args.plot_color_palette,
+    )
+
+    # Set labels
+    ax.set_xlabel("Predicted labels")
+    ax.set_ylabel("True labels")
+    ax.set_title(title)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def imshow_batch(images, args, labels=None, normalize=False):
     """
     Displays a batch of images in a grid.
 
@@ -89,7 +126,7 @@ def imshow_batch(images, labels=None, normalize=False):
     axes = axes.flatten() if batch_size > 1 else [axes]  # Handle single image case
 
     for i in range(batch_size):
-        axes[i].imshow(images[i])
+        axes[i].imshow(images[i], cmap=args.plot_color_palette)
         axes[i].axis("off")
         if labels is not None:
             axes[i].set_title(f"{labels[i]}")
