@@ -8,7 +8,7 @@ from utils import load_model
 from optimizers import get_optimizer
 
 
-def export(model, dataset, args):
+def export(model, dataset, args, quantized=False):
     model.to("cpu")
     if args.export_torchscript:
         path = (
@@ -16,7 +16,7 @@ def export(model, dataset, args):
             + "/"
             + get_model_name(model, args, file_extension="_torchscript.pth")
         )
-        export_torchscript(model, dataset.get_example_input(), path)
+        export_torchscript(model, next(iter(dataset.get_example_input())), path)
     if args.export_torchdynamo:
         path = (
             args.export_path
@@ -24,6 +24,13 @@ def export(model, dataset, args):
             + get_model_name(model, args, file_extension="_torchdynamo.pth")
         )
         export_torchdynamo(model, path)
+    if args.export_onnx and not quantized:
+        path = (
+            args.export_path
+            + "/"
+            + get_model_name(model, args, file_extension="_onnx.onnx")
+        )
+        export_onnx(model, next(iter(dataset.get_example_input())), path)
 
 
 def export_torchscript(
@@ -61,6 +68,25 @@ def export_torch_program(model, example_inputs, export_dir="./exports/"):
     exported_program_path = export_dir + "exported.pt"
     torch.save(exported_program, exported_program_path)
     return exported_program
+
+
+def export_onnx(model, example_inputs, save_path="model.onnx"):
+    model.eval()  # Set to evaluation mode
+
+    # Export the model to ONNX format
+    torch.onnx.export(
+        model,
+        example_inputs,
+        save_path,
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+    )
+
+    print(f"ONNX model saved to {save_path}")
 
 
 def load_exported_torch_program(path):

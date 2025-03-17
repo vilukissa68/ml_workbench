@@ -142,7 +142,7 @@ def main():
     if model:
         export(model, dataset, args)
     if args.save_quantized and model_q:
-        export(model_q, dataset, args)
+        export(model_q, dataset, args, quantized=True)
 
     if args.tvm_export:
         from integrations import tvm_export

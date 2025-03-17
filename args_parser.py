@@ -236,6 +236,12 @@ def parse_args():
         help="Flag to export loaded model in torchdynamo format.",
     )
 
+    parser.add_argument(
+        "--export-onnx",
+        action="store_true",
+        help="Flag to export loaded model in ONNX format.",
+    )
+
     # TVM integration options
     parser.add_argument(
         "--tvm-export",
