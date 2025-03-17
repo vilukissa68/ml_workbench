@@ -81,23 +81,31 @@ def fuse_model_layers(model):
 def ptsq(
     model,
     dataset,
-    dtype=torch.qint8,
-    backend="qnnpack",
+    args,
     wrap=True,
     calibration_batches=100,
 ):
-    data_loader, _ = dataset.get_data_loaders()
+
+    # Prepare data for calibration
+    dataset.load_data(["val"])
+    _, _, data_loader = dataset.get_data_loaders()
+
     # Model needs to be quantized on CPU
     model.to("cpu")
 
     # Setup quantization engine
-    torch.backends.quantized.engine = backend
+    torch.backends.quantized.engine = args.quantization_backend
 
     # Wrap model with fake quants
     if wrap:
+        print("Wrapping model with fake quantization layers")
         model = QuantWrapper(model)
+
     model.eval()
-    model.qconfig = torch.ao.quantization.get_default_qconfig(backend)
+    # model.qconfig = torch.ao.quantization.get_default_qconfig(backend)
+    model.qconfig = get_quantization_scheme(
+        args.quantization_scheme, args.quantization_backend
+    )
 
     model_fused = fuse_model_layers(model)
     model_prepared = torch.ao.quantization.prepare(model, inplace=False)
@@ -108,9 +116,11 @@ def ptsq(
         calibration_batches,
     )
 
-    model_int8 = torch.ao.quantization.convert(model_prepared, inplace=False)
+    model_q = torch.ao.quantization.convert(model_prepared, inplace=False)
+    if args.verbose:
+        print("Quantized model:", model_q)
 
-    return model_int8
+    return model_q
 
 
 def is_model_quantized(model):
@@ -133,3 +143,28 @@ def is_model_quantized(model):
         return True
 
     return False
+
+
+def get_quantization_scheme(scheme, backend="qnnpack"):
+    if scheme == "int8-symmetric":
+        return torch.quantization.QConfig(
+            activation=torch.quantization.FakeQuantize.with_args(
+                observer=torch.quantization.MinMaxObserver,
+                quant_min=-128,
+                quant_max=127,
+                qscheme=torch.per_tensor_symmetric,
+                dtype=torch.qint8,
+                reduce_range=False,
+            ),
+            weight=torch.quantization.FakeQuantize.with_args(
+                observer=torch.quantization.MinMaxObserver,
+                quant_min=-128,
+                quant_max=127,
+                dtype=torch.qint8,
+                qscheme=torch.per_tensor_symmetric,
+                reduce_range=False,
+            ),
+        )
+    else:
+        # Default to backend specific qconfig
+        return torch.quantization.get_default_qconfig(backend)

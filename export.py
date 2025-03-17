@@ -3,6 +3,9 @@ import torch
 from quantize import is_model_quantized
 from prune import is_model_pruned
 from pathlib import Path
+import os
+from utils import load_model
+from optimizers import get_optimizer
 
 
 def export(model, dataset, args):
@@ -143,7 +146,7 @@ def get_model_name(
     return filename
 
 
-def load_checkpoint(args):
+def load_checkpoint(args, dataset):
     def load_statedict(model, optimizer, checkpoint_path):
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -157,6 +160,9 @@ def load_checkpoint(args):
     model_q = None
     model = None
     model_type = "pytorch"
+
+    if args.verbose:
+        print(f"Loading model from: {args.load_checkpoint_path}")
 
     # Tflite load
     if file_extension == ".tflite":
@@ -176,8 +182,8 @@ def load_checkpoint(args):
     # Pytorch load
     else:
         model_name = torch.load(args.load_checkpoint_path)["model_name"]
-        model = load_model(model_name, num_classes, args)
-        optimizer = get_optimizer(args.optimizer, model, args.lr)
+        model = load_model(model_name, dataset.get_num_classes(), args)
+        optimizer, _ = get_optimizer(model, args)
         model, optimizer, epoch, quantized, pruned = load_statedict(
             model, optimizer, args.load_checkpoint_path
         )

@@ -3,27 +3,36 @@ import torch
 import torch.nn.functional as F
 
 
-def benchmark_inference(model, dataset, batch_size, device, num_iterations):
+def benchmark_inference(model, dataset, device, args):
     """
     Benchmarks the inference latency and measures accuracy of the model.
 
     Args:
         model (torch.nn.Module): The model to evaluate.
-        data_loader (torch.utils.data.DataLoader): DataLoader for evaluation.
-        device (torch.device): Device to run inference on (CPU or CUDA).
-        num_iterations (int): Number of iterations for benchmarking.
+        dataset (Dataset): The dataset to evaluate the model on.
+        device (str): The device to run the inference on.
+        args (argparse.Namespace): The command-line arguments.
 
     Returns:
-        dict: Contains 'accuracy' and 'avg_latency' in milliseconds.
+        dict: A dictionary containing the accuracy, average latency, and predictions
     """
 
     model.eval()
     model.to(device)
 
+    if args.verbose:
+        # Print detailed inference specs
+        print(
+            "Inference benchmarking on {}, batch size {}...".format(
+                device, args.batch_size
+            )
+        )
+
     correct = 0
     total = 0
 
-    _, data_loader = dataset.get_data_loaders()
+    dataset.load_data(["test"])
+    _, data_loader, _ = dataset.get_data_loaders()
 
     # Warm-up
     for _ in range(5):
@@ -37,7 +46,7 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
     all_preds = []
     all_lables = []
     for i, (inputs, labels) in enumerate(data_loader):
-        if i >= num_iterations:
+        if i >= args.benchmark_num_iterations:
             break
 
         inputs, labels = inputs.to(device), labels.to(device)
@@ -57,11 +66,11 @@ def benchmark_inference(model, dataset, batch_size, device, num_iterations):
         all_preds.extend(preds.to("cpu"))
         all_lables.extend(labels.to("cpu"))
 
-    avg_latency = total_time / num_iterations
+    avg_latency = total_time / args.benchmark_num_iterations
     accuracy = correct / total * 100
 
     print(
-        f"Average Inference Latency: {avg_latency * 1000:.4f} ms per batch (batch size = {batch_size})"
+        f"Average Inference Latency: {avg_latency * 1000:.4f} ms per batch (batch size = {args.batch_size})"
     )
     print(f"Accuracy: {accuracy:.2f}%")
 

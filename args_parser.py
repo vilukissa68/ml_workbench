@@ -160,6 +160,14 @@ def parse_args():
         help="Define quantization backend.",
     )
 
+    parser.add_argument(
+        "--quantization-scheme",
+        type=str,
+        default="",
+        choices=["int8-symmetric"],
+        help="Define quantization scheme. Sets QConfig. If empty, default to backend QConfig.",
+    )
+
     # Checkpoint options
     parser.add_argument(
         "--checkpoint-dir",

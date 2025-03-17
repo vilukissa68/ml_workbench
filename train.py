@@ -1,17 +1,13 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
-import os
-from datasets import mnist, cifar10
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 from export import save_checkpoint
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
+from optimizers import get_optimizer
 
 
 def is_dist_avail_and_initialized():
@@ -27,54 +23,6 @@ def is_main_process():
         return True
     rank = dist.get_rank()
     return rank == 0
-
-
-def get_optimizer(model, args):
-    # Ensure both betas are set
-    if args.optimizer_beta1 and args.optimizer_bet2:
-        betas = (args.optimizer_beta1, args.optimizer_beta2)
-    else:
-        betas = (0.9, 0.999)
-
-    if args.optimizer == "SGD":
-        optimizer = optim.SGD(
-            model.parameters(),
-            lr=args.lr,
-            momentum=0.9,
-            weight_decay=args.weight_decay,
-            betas=betas,
-        )
-    elif args.optimizer == "Adam":
-        # optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-        optimizer = optim.Adam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
-    elif args.optimizer == "AdamW":
-        optimizer = optim.AdamW(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas
-        )
-    else:
-        raise ValueError(f"Optimizer {args.optimizer} is not supported!")
-
-    if args.scheduler == "StepLR":
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer, step_size=args.scheduler_step_size, gamma=args.scheduler_gamma
-        )
-    elif args.scheduler == "MultiStepLR":
-        scheduler = optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[5, 10, 15], gamma=args.scheduler_gamma
-        )
-    elif args.scheduler == "ReduceLROnPlateau":
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.1, patience=10, verbose=True
-        )
-    # elif args.scheduler == "LambdaLR":
-    #     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=schedule_func)
-    else:
-        print("No scheduler")
-        scheduler = None
-
-    return optimizer, scheduler
 
 
 def get_criterion(criterion):
@@ -184,6 +132,9 @@ def train(
     criterion = get_criterion(args.criterion)
     optimizer, scheduler = get_optimizer(model, args)
 
+    # Load data to model
+    dataset.load_data()
+
     if args.verbose:
         print("Training on", device)
 
@@ -203,12 +154,12 @@ def train(
         test_sampler = torch.utils.data.distributed.DistributedSampler(
             dataset.trainset, num_replicas=args.world_size, rank=rank
         )
-        train_loader, test_loader = dataset.get_data_loaders(
+        train_loader, test_loader, _ = dataset.get_data_loaders(
             args.batch_size, train_sampler, None, 0
         )
         print("Rank:", dist.get_rank())
     else:
-        train_loader, test_loader = dataset.get_data_loaders(
+        train_loader, test_loader, _ = dataset.get_data_loaders(
             args.batch_size, None, None, args.num_workers
         )
         model.to(device)
