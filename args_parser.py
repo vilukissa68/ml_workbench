@@ -175,8 +175,20 @@ def parse_args():
         default="./checkpoints",
         help="Path to save model checkpoints. If None, no checkpoints are saved.",
     )
+
+    # Load options
     parser.add_argument(
-        "--load-checkpoint-path",
+        "--load-checkpoint",
+        action="store_true",
+        help="Flag to load a model checkpoint.",
+        )
+    parser.add_argument(
+        "--load-exported-program",
+        action="store_true",
+        help="Flag to load exported program.",
+        )
+    parser.add_argument(
+        "--load-path",
         type=str,
         default=None,
         help="Path to model checkpoint to load. If empty no checkpoint will be loaded.",
@@ -235,11 +247,15 @@ def parse_args():
         action="store_true",
         help="Flag to export loaded model in torchdynamo format.",
     )
-
     parser.add_argument(
         "--export-onnx",
         action="store_true",
         help="Flag to export loaded model in ONNX format.",
+    )
+    parser.add_argument(
+        "--export-program",
+        action="store_true",
+        help="Flag to export model in Torch exported program format.",
     )
 
     # TVM integration options

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from train import train, get_optimizer
-from export import export, load_checkpoint
+from export import export, load_checkpoint, load_exported_torch_program
 import args_parser
 from benchmark_inference import benchmark_inference  # Import the benchmarking function
 from visualize import (
@@ -42,8 +42,10 @@ def main():
     args.batch_size = int(args.batch_size / args.ngpus)
     dataset = get_dataset(args.dataset, args)
 
-    if args.load_checkpoint_path:
-        model, model_q, model_type = load_checkpoint(args, dataset)
+    if args.load_checkpoint:
+        model, model_q, _ = load_checkpoint(args, dataset)
+    elif args.load_exported_program:
+        model = load_exported_torch_program(args.load_path)
     else:  # Load empty model
         model = load_model(args.model, dataset.get_num_classes(), args)
         model_q = None
@@ -71,7 +73,6 @@ def main():
                 )
             else:
                 train(0, model, dataset, args, writer)
-        model_type = "pytorch"
 
     # Quantizie fp32, skip if using QAT already
     if args.quantize and not args.qat:

@@ -24,6 +24,14 @@ def export(model, dataset, args, quantized=False):
             + get_model_name(model, args, file_extension="_torchdynamo.pth")
         )
         export_torchdynamo(model, path)
+    if args.export_program:
+        example_inputs = (next(iter(dataset.get_example_input())),)
+        path = (
+            args.export_path
+            + "/"
+            + get_model_name(model, args, file_extension="_exported.pt")
+            )
+        export_torch_program(model, example_inputs, path)
     if args.export_onnx and not quantized:
         path = (
             args.export_path
@@ -31,6 +39,7 @@ def export(model, dataset, args, quantized=False):
             + get_model_name(model, args, file_extension="_onnx.onnx")
         )
         export_onnx(model, next(iter(dataset.get_example_input())), path)
+
 
 
 def export_torchscript(
@@ -61,12 +70,12 @@ def export_torchdynamo(model, save_path="model_torchdynamo.pth", backend="induct
     return compiled_model
 
 
-def export_torch_program(model, example_inputs, export_dir="./exports/"):
-    exported_program = torch.export.ExportedProgram(model, args=example_inputs)
+def export_torch_program(model, example_inputs, path):
 
+    exported_program = torch.export.export(model, args=example_inputs)
     # Save the exported program to a file
-    exported_program_path = export_dir + "exported.pt"
-    torch.save(exported_program, exported_program_path)
+    torch.save(exported_program, path)
+    print(f"Exported program saved to {path}")
     return exported_program
 
 
@@ -182,18 +191,18 @@ def load_checkpoint(args, dataset):
         pruned = checkpoint["pruned"]
         return model, optimizer, epoch, quantized, pruned
 
-    _, file_extension = os.path.splitext(args.load_checkpoint_path)
+    _, file_extension = os.path.splitext(args.load_path)
     model_q = None
     model = None
     model_type = "pytorch"
 
     if args.verbose:
-        print(f"Loading model from: {args.load_checkpoint_path}")
+        print(f"Loading model from: {args.load_path}")
 
     # Tflite load
     if file_extension == ".tflite":
-        print(args.load_checkpoint_path)
-        tflite_model_buf = open(args.load_checkpoint_path, "rb").read()
+        print(args.load_path)
+        tflite_model_buf = open(args.load_path, "rb").read()
         print("Loading TFLite model")
         model_type = "tflite"
         try:
@@ -207,11 +216,11 @@ def load_checkpoint(args, dataset):
 
     # Pytorch load
     else:
-        model_name = torch.load(args.load_checkpoint_path)["model_name"]
+        model_name = torch.load(args.load_path)["model_name"]
         model = load_model(model_name, dataset.get_num_classes(), args)
         optimizer, _ = get_optimizer(model, args)
         model, optimizer, epoch, quantized, pruned = load_statedict(
-            model, optimizer, args.load_checkpoint_path
+            model, optimizer, args.load_path
         )
         if quantized:
             model_q = model
